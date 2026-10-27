@@ -1,3 +1,4 @@
+mod burn;
 mod commands;
 mod config;
 mod memclean;
@@ -36,6 +37,10 @@ pub fn run() {
                 // 悬浮窗不抢键盘焦点（WS_EX_NOACTIVATE）
                 let _ = win.set_focusable(false);
                 let _ = win.show();
+                // 文件拖到图标上即焚烧
+                if let Ok(hwnd) = win.hwnd() {
+                    let _ = burn::install(app.handle(), hwnd.0 as isize);
+                }
             }
 
             metrics::start(app.handle().clone());
@@ -94,7 +99,9 @@ pub fn run() {
             commands::dismiss_update,
             commands::set_update_auto,
             commands::open_repo,
-            commands::clean_memory
+            commands::clean_memory,
+            commands::burn_catch,
+            commands::burn_state
         ])
         .run(tauri::generate_context!())
         .expect("error while running Cinder");

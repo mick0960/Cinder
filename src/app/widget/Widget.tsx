@@ -28,6 +28,21 @@ export function Widget() {
     dragStart = null;
   };
 
+  // 文件拖到图标上按住 4 秒即焚烧：网页拿不到文件路径，收到 dragenter 后让后端盖上原生接手窗（见 burn/catcher.rs）
+  const onDragEnter = (e: DragEvent) => {
+    if (e.dataTransfer?.types.includes("Files")) invoke("burn_catch");
+  };
+  // 拦下网页自己的放下，否则 WebView 会打开被拖的文件
+  const stop = (e: DragEvent) => e.preventDefault();
+  document.addEventListener("dragenter", onDragEnter);
+  document.addEventListener("dragover", stop);
+  document.addEventListener("drop", stop);
+  onCleanup(() => {
+    document.removeEventListener("dragenter", onDragEnter);
+    document.removeEventListener("dragover", stop);
+    document.removeEventListener("drop", stop);
+  });
+
   return (
     <div
       class="widget"

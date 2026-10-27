@@ -27,12 +27,27 @@ encoding_rs = "0.8"
 tokio = { version = "1", features = ["process", "time", "sync", "macros"] }
 
 [target.'cfg(windows)'.dependencies]
+# 与 wry 使用同一版本：实现 OLE 拖放目标（IDropTarget）
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Ole",
+    "Win32_System_SystemServices",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+windows-core = "0.62"
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security",
+    "Win32_System_Com",
     "Win32_System_ProcessStatus",
     "Win32_System_SystemInformation",
     "Win32_System_Threading",
+    "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
 

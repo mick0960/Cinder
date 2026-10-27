@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use tauri::{AppHandle, Emitter, Manager, State, Window};
 
+use crate::burn;
 use crate::config::{self, AppState, ModuleConfig, RunnerConfig};
 use crate::memclean;
 use crate::menu;
@@ -158,6 +159,17 @@ pub async fn clean_memory() -> Result<memclean::CleanResult, String> {
     tauri::async_runtime::spawn_blocking(memclean::clean)
         .await
         .map_err(|e| e.to_string())?
+}
+
+/// 图标网页收到文件 dragenter：盖上原生接手窗，由它拿到文件路径并开始焚烧（见 burn/catcher.rs）
+#[tauri::command]
+pub fn burn_catch(app: AppHandle) {
+    burn::catch(&app);
+}
+
+#[tauri::command]
+pub fn burn_state() -> Option<burn::Snapshot> {
+    burn::snapshot()
 }
 
 #[tauri::command]

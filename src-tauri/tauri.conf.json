@@ -24,6 +24,7 @@
         "shadow": false,
         "focus": false,
         "visible": false,
+        "dragDropEnabled": false,
         "additionalBrowserArgs": "--disable-gpu --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection"
       }
     ]

@@ -12,6 +12,8 @@ if (label === "settings") {
 } else if (label === "update-toast") {
   document.documentElement.classList.add("toast-page");
   import("./app/update/Toast").then((m) => render(() => m.Toast(), root));
+} else if (label === "burn") {
+  import("./app/burn/BurnWindow").then((m) => render(() => m.BurnWindow(), root));
 } else if (label === "panel") {
   import("./app/widget/PanelWindow").then((m) => render(() => m.PanelWindow(), root));
 } else {
