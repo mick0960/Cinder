@@ -21,7 +21,7 @@ const [moduleOutputs, setModuleOutputs] = createSignal<Record<string, ModuleOutp
 const [moduleHistory, setModuleHistory] = createSignal<Record<string, number[]>>({});
 const [modules, setModules] = createSignal<ModuleConfig[]>([]);
 const [runners, setRunners] = createSignal<RunnerConfig[]>([]);
-const [character, setCharacter] = createSignal<string>("cat");
+const [character, setCharacter] = createSignal<string>("bonfire");
 const [metricHistory, setMetricHistory] = createSignal<MetricHistory>({ cpu: [], down: [], up: [], at: 0, stepMs: 1000 });
 
 const pushCapped = (arr: number[], v: number, cap: number) => {

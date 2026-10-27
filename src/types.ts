@@ -56,4 +56,13 @@ export interface AppConfig {
   metrics: { panelIntervalMs: number; idleIntervalMs: number };
   modules: ModuleConfig[];
   runners: RunnerConfig[];
+  update: { auto: boolean; skippedVersion: string | null };
+}
+
+export interface UpdateStatus {
+  state: "idle" | "checking" | "available" | "downloading" | "ready" | "uptodate" | "error";
+  version: string | null;
+  notes: string | null;
+  progress: number;
+  error: string | null;
 }

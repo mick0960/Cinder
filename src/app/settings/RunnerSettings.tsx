@@ -37,7 +37,7 @@ async function fileToFrame(f: File): Promise<string> {
   return c.toDataURL("image/png");
 }
 
-const BUILTIN: [string, string, string][] = [["cat", "猫（内置）", "🐱"], ["dog", "狗（内置）", "🐶"]];
+const BUILTIN: [string, string, string][] = [["bonfire", "篝火（内置）", "🔥"]];
 
 /** 预览：按固定节奏循环播放所有帧 */
 function FramePreview(props: { frames: string[] }) {
@@ -55,7 +55,7 @@ function FramePreview(props: { frames: string[] }) {
 
 export function RunnerSettings() {
   const [runners, setRunners] = createSignal<RunnerConfig[]>([]);
-  const [current, setCurrent] = createSignal("cat");
+  const [current, setCurrent] = createSignal("bonfire");
   const [selected, setSelected] = createSignal<string | null>(null);
   const [msg, setMsg] = createSignal("");
   const [dragOver, setDragOver] = createSignal(false);
@@ -64,7 +64,7 @@ export function RunnerSettings() {
 
   invoke<AppConfig>("get_config").then((c) => {
     setRunners(c.runners ?? []);
-    setCurrent(c.character || "cat");
+    setCurrent(c.character || "bonfire");
     if (c.runners?.length) setSelected(c.runners[0].id);
   });
 
@@ -72,9 +72,9 @@ export function RunnerSettings() {
     setRunners(next);
     try {
       await invoke("save_runners", { runners: next });
-      // 后端会在当前角色被删除时回退到猫，这里同步一次
+      // 后端会在当前角色被删除时回退到内置篝火，这里同步一次
       const c = await invoke<AppConfig>("get_config");
-      setCurrent(c.character || "cat");
+      setCurrent(c.character || "bonfire");
     } catch (e) {
       setMsg("保存失败：" + String(e));
     }

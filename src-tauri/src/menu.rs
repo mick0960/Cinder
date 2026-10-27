@@ -17,8 +17,7 @@ pub fn popup(app: &tauri::AppHandle, window: tauri::Window) -> tauri::Result<()>
         ch
     };
     let mut entries = vec![
-        ("char:cat".to_string(), "猫".to_string()),
-        ("char:dog".to_string(), "狗".to_string()),
+        ("char:bonfire".to_string(), "篝火".to_string()),
     ];
     {
         let state = app.state::<crate::config::AppState>();
@@ -58,7 +57,7 @@ pub fn open_settings(app: &tauri::AppHandle) -> tauri::Result<()> {
         "settings",
         tauri::WebviewUrl::App("index.html".into()),
     )
-    .title("catfloat 设置")
+    .title("Cinder 设置")
     .inner_size(720.0, 520.0)
     .min_inner_size(560.0, 400.0)
     .resizable(true)

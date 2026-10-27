@@ -51,7 +51,7 @@ pub fn set_panel_open(app: &AppHandle, open: bool) {
     };
     PANEL_OPEN.store(open, Ordering::Relaxed);
     EMIT_MS.store(
-        if open { panel_ms.max(250) } else { idle_ms.max(500) },
+        if open { panel_ms.max(1000) } else { idle_ms.max(2000) },
         Ordering::Relaxed,
     );
     if open {
@@ -141,7 +141,7 @@ pub fn start(app: AppHandle) {
 
             config::save_if_dirty(&app);
 
-            let ms = EMIT_MS.load(Ordering::Relaxed).max(250);
+            let ms = EMIT_MS.load(Ordering::Relaxed).max(1000);
             std::thread::sleep(Duration::from_millis(ms));
         }
     });

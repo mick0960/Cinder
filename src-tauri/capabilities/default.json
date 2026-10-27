@@ -1,6 +1,6 @@
 {
   "identifier": "default",
-  "description": "catfloat 主能力",
+  "description": "Cinder 主能力",
   "windows": ["*"],
   "permissions": [
     "core:default",

@@ -28,8 +28,8 @@ pub struct MetricsConfig {
 impl Default for MetricsConfig {
     fn default() -> Self {
         Self {
-            panel_interval_ms: 300,
-            idle_interval_ms: 1000,
+            panel_interval_ms: 1000,
+            idle_interval_ms: 2000,
         }
     }
 }
@@ -69,6 +69,21 @@ impl Default for ModuleConfig {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(default, rename_all = "camelCase")]
+pub struct UpdateConfig {
+    /// true：发现新版本后静默下载；false：仅提示，由用户手动下载
+    pub auto: bool,
+    /// 用户选择“下次再说”的版本，后台检查时不再提示（手动检查不受影响）
+    pub skipped_version: Option<String>,
+}
+
+impl Default for UpdateConfig {
+    fn default() -> Self {
+        Self { auto: true, skipped_version: None }
+    }
+}
+
 /// 自定义角色（runner）：一组按顺序循环播放的图片帧（data URL）
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(default, rename_all = "camelCase")]
@@ -86,16 +101,18 @@ pub struct AppConfig {
     pub metrics: MetricsConfig,
     pub modules: Vec<ModuleConfig>,
     pub runners: Vec<RunnerConfig>,
+    pub update: UpdateConfig,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
             window: WindowConfig::default(),
-            character: "cat".into(),
+            character: "bonfire".into(),
             metrics: MetricsConfig::default(),
             modules: Vec::new(),
             runners: Vec::new(),
+            update: UpdateConfig::default(),
         }
     }
 }
@@ -114,12 +131,24 @@ pub fn load_or_default(app: &AppHandle) -> AppConfig {
     if let Some(dir) = path.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
+    // 从旧名称 catfloat 迁移配置
+    if !path.exists() {
+        if let Some(old) = path.parent().and_then(|d| d.parent()).map(|d| d.join("com.catfloat.app").join("config.json")) {
+            let _ = std::fs::copy(old, &path);
+        }
+    }
     match std::fs::read(&path) {
         Ok(bytes) => {
             // 兼容带 BOM 的 UTF-8（PowerShell 等工具写入）
             let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF][..]).unwrap_or(&bytes);
             match serde_json::from_slice::<AppConfig>(bytes) {
-                Ok(cfg) => cfg,
+                Ok(mut cfg) => {
+                    // 旧版内置的猫 / 狗已移除
+                    if cfg.character == "cat" || cfg.character == "dog" {
+                        cfg.character = "bonfire".into();
+                    }
+                    cfg
+                }
                 Err(_) => {
                     let _ = std::fs::rename(&path, path.with_extension("json.bak"));
                     AppConfig::default()
@@ -166,7 +195,7 @@ pub fn set_runners(app: &AppHandle, runners: Vec<RunnerConfig>) {
         // 当前选中的自定义角色被删除时回退到默认猫
         if let Some(id) = cfg.character.strip_prefix("custom:") {
             if !cfg.runners.iter().any(|r| r.id == id) {
-                cfg.character = "cat".into();
+                cfg.character = "bonfire".into();
             }
         }
         cfg.clone()
@@ -185,6 +214,16 @@ pub fn set_character(app: &AppHandle, character: &str) {
     save(app, &snapshot);
     use tauri::Emitter;
     let _ = app.emit("character://changed", character);
+}
+
+pub fn set_update(app: &AppHandle, f: impl FnOnce(&mut UpdateConfig)) {
+    let snapshot = {
+        let state = app.state::<AppState>();
+        let mut cfg = state.0.write().unwrap();
+        f(&mut cfg.update);
+        cfg.clone()
+    };
+    save(app, &snapshot);
 }
 
 pub fn save_if_dirty(app: &AppHandle) {

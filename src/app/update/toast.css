@@ -1,0 +1,35 @@
+html.toast-page, html.toast-page body { background: transparent; overflow: hidden; }
+
+.toast-wrap { width: 100vw; height: 100vh; padding: 6px; box-sizing: border-box; font-size: 13px; color: #eee; }
+.toast {
+  height: 100%; box-sizing: border-box; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px;
+  background: #26262b; border: 1px solid #3a3a42; border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  animation: toast-in 0.35s cubic-bezier(0.3, 1.3, 0.5, 1) backwards;
+}
+@keyframes toast-in { from { opacity: 0; transform: translateY(14px) scale(0.96); } }
+
+.toast-head { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.toast-ico {
+  width: 18px; height: 18px; border-radius: 50%; flex: none; display: grid; place-items: center;
+  font-size: 12px; background: linear-gradient(135deg, #0a84ff, #4cc2ff); color: #fff;
+}
+.toast-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toast-body { flex: 1; color: #aaa; font-size: 12px; line-height: 1.4; overflow: hidden; display: flex; align-items: center; }
+.toast-body > * { width: 100%; }
+
+.bar { height: 6px; border-radius: 3px; background: #3a3a42; overflow: hidden; }
+.bar i { display: block; height: 100%; background: linear-gradient(90deg, #0a84ff, #4cc2ff); transition: width 0.2s; }
+
+.toast-actions { display: flex; justify-content: flex-end; gap: 8px; min-height: 28px; }
+.toast-actions button {
+  font: inherit; font-size: 12px; padding: 5px 12px; border-radius: 7px; cursor: pointer;
+  border: 1px solid #3a3a42; color: #ddd; background: #2e2e34; transition: background-color 0.18s, transform 0.12s;
+}
+.toast-actions button:hover:not(:disabled) { background: #383840; }
+.toast-actions button:active:not(:disabled) { transform: scale(0.96); }
+.toast-actions button:disabled { opacity: 0.6; cursor: default; }
+.toast-actions .primary { background: #0078d4; border-color: #0078d4; color: #fff; }
+.toast-actions .primary:hover:not(:disabled) { background: #1a86dd; }
+.toast-actions .ghost { background: transparent; border-color: transparent; color: #999; }
+.toast-actions .ghost:hover { color: #ddd; background: rgba(255, 255, 255, 0.06); }

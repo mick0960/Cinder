@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AppConfig, ModuleConfig } from "../../types";
 import { RunnerSettings } from "./RunnerSettings";
+import { AboutSettings } from "./AboutSettings";
 import { COLOR_OK } from "../components/ModuleStyles";
 import "./settings.css";
 
@@ -90,7 +91,7 @@ function StylePicker(props: { value: ModuleConfig["style"]; color: string; onCha
 }
 
 export function Settings() {
-  const [tab, setTab] = createSignal<"modules" | "runners">("modules");
+  const [tab, setTab] = createSignal<"modules" | "runners" | "about">("modules");
   const [modules, setModules] = createSignal<ModuleConfig[]>([]);
   const [saved, setSaved] = createSignal("[]");
   const [selected, setSelected] = createSignal<string | null>(null);
@@ -237,7 +238,7 @@ export function Settings() {
     document.fonts?.ready.then(measureInk);
   });
 
-  const Tab = (p: { id: "modules" | "runners"; children: string }) => (
+  const Tab = (p: { id: "modules" | "runners" | "about"; children: string }) => (
     <button
       ref={(el) => (tabEls[p.id] = el)}
       class="tab"
@@ -253,10 +254,14 @@ export function Settings() {
       <div class="tabs">
         <Tab id="modules">监控模块</Tab>
         <Tab id="runners">角色 / Runner</Tab>
+        <Tab id="about">关于</Tab>
         <span class="tab-ink" style={{ transform: `translateX(${ink().x}px)`, width: `${ink().w}px` }} />
       </div>
       <Show when={tab() === "runners"}>
         <RunnerSettings />
+      </Show>
+      <Show when={tab() === "about"}>
+        <AboutSettings />
       </Show>
       <div class="cols pane-in" style={{ display: tab() === "modules" ? "flex" : "none" }}>
         <div class="left">

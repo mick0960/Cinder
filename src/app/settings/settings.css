@@ -254,3 +254,25 @@ button.link:hover { text-decoration: underline; }
 @media (prefers-reduced-motion: reduce) {
   .settings *, .settings *::before, .settings *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- 更新 ---------- */
+.upd { padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; align-items: flex-start; }
+.upd-row { display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 480px; }
+.upd-title { font-weight: 600; }
+.upd-sub { color: #999; margin-top: 2px; }
+.upd-status { color: #8ab4ff; }
+.upd-status.err { color: #ff7d7d; }
+.upd-sep { width: 100%; max-width: 480px; height: 1px; background: var(--line); margin: 4px 0; }
+.upd-opt { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; max-width: 480px; }
+.upd-opt input { margin-top: 3px; }
+.upd-opt small { display: block; color: #999; margin-top: 2px; line-height: 1.4; }
+.upd .primary { background: #0078d4; border-color: #0078d4; }
+.upd .primary:hover:not(:disabled) { background: #1a86dd; border-color: #1a86dd; }
+
+/* ---------- 关于 ---------- */
+.about-name { font-size: 22px; font-weight: 700; letter-spacing: 0.5px; background: linear-gradient(90deg, #ff9a3c, #ffd36b); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.about-rows { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 480px; }
+.about-row { display: flex; gap: 16px; }
+.about-row > span:first-child { width: 48px; color: #999; flex: none; }
+.about-row a { color: #8ab4ff; text-decoration: none; }
+.about-row a:hover { text-decoration: underline; }

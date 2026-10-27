@@ -18,22 +18,7 @@
   /* 浅色描边 + 轻投影：深色、浅色壁纸上都能看清 */
   filter: drop-shadow(0 0 0.7px rgba(255, 255, 255, 0.95)) drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.35));
 }
-.cat .fur { fill: #f0a35a; }
-.cat .belly { fill: #fff1de; }
-.cat .ear-in { fill: #f5b7b1; }
-.cat .ear-dog { fill: #b9783a; }
-.cat .eye-w { fill: #fff; }
-.cat .eye { fill: #1c1c1c; }
-.cat .nose { fill: #5a3a2a; }
-.cat .mouth { stroke: #7a4a2a; stroke-width: 0.7; fill: none; stroke-linecap: round; }
-.cat .whisker { stroke: #fff; stroke-width: 0.6; fill: none; stroke-linecap: round; opacity: 0.9; }
-.cat .tail { stroke: #f0a35a; stroke-width: 3.6; fill: none; stroke-linecap: round; }
-.cat .leg { stroke: #f0a35a; stroke-width: 3.2; fill: none; stroke-linecap: round; }
-.cat .leg.far { stroke: #c9803a; }
-.cat.dog .fur, .cat.dog .tail, .cat.dog .leg { fill: #d9b38a; }
-.cat.dog .tail, .cat.dog .leg { fill: none; stroke: #d9b38a; }
-.cat.dog .leg.far { stroke: #b08d66; }
-.cat.custom { object-fit: contain; image-rendering: auto; }
+.cat { object-fit: contain; image-rendering: auto; }
 
 /* ---------- settings ---------- */
 html.settings-page,

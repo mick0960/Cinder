@@ -6,6 +6,7 @@ use crate::config::{self, AppState, ModuleConfig, RunnerConfig};
 use crate::menu;
 use crate::metrics;
 use crate::modules;
+use crate::updater::{self, UpdateStatus};
 
 #[tauri::command]
 pub fn get_config(state: State<AppState>) -> config::AppConfig {
@@ -71,4 +72,43 @@ pub async fn test_module(cfg: ModuleConfig) -> Result<serde_json::Value, String>
             "error": e,
         }),
     })
+}
+
+#[tauri::command]
+pub fn get_update_status(app: AppHandle) -> UpdateStatus {
+    updater::status(&app)
+}
+
+#[tauri::command]
+pub async fn check_update(app: AppHandle) -> UpdateStatus {
+    updater::check(&app, true).await
+}
+
+#[tauri::command]
+pub async fn download_update(app: AppHandle) -> UpdateStatus {
+    updater::download(&app).await
+}
+
+#[tauri::command]
+pub fn install_update(app: AppHandle) -> Result<(), String> {
+    updater::install(&app)
+}
+
+#[tauri::command]
+pub fn dismiss_update(app: AppHandle) {
+    updater::dismiss(&app);
+}
+
+#[tauri::command]
+pub fn set_update_auto(app: AppHandle, auto: bool) {
+    config::set_update(&app, |u| u.auto = auto);
+}
+
+#[tauri::command]
+pub fn open_repo() {
+    use std::os::windows::process::CommandExt;
+    let _ = std::process::Command::new("rundll32")
+        .args(["url.dll,FileProtocolHandler", crate::REPO_URL])
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
+        .spawn();
 }

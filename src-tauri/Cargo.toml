@@ -1,10 +1,11 @@
 [package]
-name = "catfloat"
+name = "cinder"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 
 [lib]
-name = "catfloat_lib"
+name = "cinder_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [features]
@@ -16,6 +17,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sysinfo = "0.33"

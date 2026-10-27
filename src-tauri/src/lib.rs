@@ -3,11 +3,15 @@ mod config;
 mod menu;
 mod metrics;
 mod modules;
+mod updater;
 
 use tauri::Manager;
 
+pub const REPO_URL: &str = "https://github.com/mick0960/Cinder";
+
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let cfg = config::load_or_default(app.handle());
             app.manage(config::AppState(std::sync::RwLock::new(cfg)));
@@ -29,6 +33,8 @@ pub fn run() {
 
             metrics::start(app.handle().clone());
             modules::start(app.handle().clone());
+            app.manage(updater::UpdateState::default());
+            updater::start(app.handle().clone());
 
             app.on_menu_event(|app, event| match event.id().as_ref() {
                 "exit" => app.exit(0),
@@ -70,10 +76,17 @@ pub fn run() {
             commands::save_modules,
             commands::save_runners,
             commands::set_character,
-            commands::test_module
+            commands::test_module,
+            commands::get_update_status,
+            commands::check_update,
+            commands::download_update,
+            commands::install_update,
+            commands::dismiss_update,
+            commands::set_update_auto,
+            commands::open_repo
         ])
         .run(tauri::generate_context!())
-        .expect("error while running catfloat");
+        .expect("error while running Cinder");
 }
 
 /// 把保存的位置限制在某个显示器内。

@@ -151,76 +151,22 @@ function useFrameClock(frames: () => number) {
   return frame;
 }
 
+const BUILTIN_FRAMES = Object.entries(
+  import.meta.glob("../../assets/bonfire/*.png", { eager: true, query: "?url", import: "default" }) as Record<string, string>,
+)
+  .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+  .map(([, url]) => url);
+
 function Cat(props: { character: () => string }) {
-  const custom = () => {
-    const id = props.character().startsWith("custom:") ? props.character().slice(7) : null;
-    const r = id ? runners().find((x) => x.id === id) : undefined;
-    return r && r.frames.length > 0 ? r : null;
+  // 自定义角色被删除或帧为空时回退到内置篝火
+  const frames = () => {
+    const ch = props.character();
+    const r = ch.startsWith("custom:") ? runners().find((x) => x.id === ch.slice(7)) : undefined;
+    return r && r.frames.length > 0 ? r.frames : BUILTIN_FRAMES;
   };
-  return (
-    <Show when={custom()} fallback={<BuiltinCat character={props.character} />}>
-      {(r) => <CustomRunner frames={r().frames} />}
-    </Show>
-  );
+  const frame = useFrameClock(() => frames().length);
+  return <img class="cat" width="64" height="64" draggable={false} src={frames()[frame() % frames().length]} />;
 }
-
-function CustomRunner(props: { frames: string[] }) {
-  const frame = useFrameClock(() => props.frames.length);
-  return <img class="cat custom" width="64" height="64" draggable={false} src={props.frames[frame() % props.frames.length]} />;
-}
-
-function BuiltinCat(props: { character: () => string }) {
-  const frame = useFrameClock(() => LEG_FRAMES.length);
-  const bob = () => (frame() % 2 === 0 ? 0 : -1.2);
-  const legs = () => LEG_FRAMES[frame()];
-  const dog = () => props.character() === "dog";
-  return (
-    <svg class="cat" classList={{ dog: dog() }} viewBox="0 0 64 64" width="64" height="64">
-      <g transform={`translate(0 ${bob()})`}>
-        {/* 远侧的腿画在身体后面，近侧的腿画在前面，有层次感 */}
-        <For each={legs().slice(0, 2)}>
-          {(l) => <path class="leg far" d={`M${l[0]} 41 Q${(l[0] + l[1]) / 2 + l[2]} 46 ${l[1]} 53`} />}
-        </For>
-        <path class="tail" d={dog() ? "M17 35 C12 32 11 25 14 21" : "M17 36 C8 36 5 27 10 21 C12 19 14 20 14 22"} />
-        <ellipse cx="30" cy="36" rx="15" ry="8" class="fur" />
-        <ellipse cx="31" cy="39.5" rx="10" ry="4" class="belly" />
-        <For each={legs().slice(2)}>
-          {(l) => <path class="leg" d={`M${l[0]} 41 Q${(l[0] + l[1]) / 2 + l[2]} 46 ${l[1]} 53`} />}
-        </For>
-        <circle cx="45" cy="27" r="8" class="fur" />
-        <Show
-          when={dog()}
-          fallback={
-            <>
-              <path d="M38.5 24 L39 15.5 L45 21 Z" class="fur" />
-              <path d="M45 21 L51 15.5 L51.5 24 Z" class="fur" />
-              <path d="M40 21.5 L40.3 18.2 L43 20.7 Z" class="ear-in" />
-              <path d="M47 20.7 L49.7 18.2 L50 21.5 Z" class="ear-in" />
-              <path d="M44 30 q1 1.3 2 0 M47 30 q1 1.3 2 0" class="mouth" />
-              <path d="M49 28.5 l6 -1.2 M49 29.7 l6 1.2" class="whisker" />
-              <ellipse cx="48.8" cy="28" rx="1.1" ry="0.8" class="nose" />
-            </>
-          }
-        >
-          <ellipse cx="39" cy="24" rx="2.8" ry="6" transform="rotate(-18 39 24)" class="ear-dog" />
-          <ellipse cx="51" cy="24" rx="2.8" ry="6" transform="rotate(18 51 24)" class="ear-dog" />
-          <ellipse cx="50" cy="30" rx="3.6" ry="2.8" class="belly" />
-          <ellipse cx="51.5" cy="29" rx="1.6" ry="1.2" class="nose" />
-        </Show>
-        <circle cx="46.5" cy="25.8" r="1.5" class="eye-w" />
-        <circle cx="46.9" cy="25.8" r="0.9" class="eye" />
-      </g>
-    </svg>
-  );
-}
-
-const LEG_FRAMES: number[][][] = [
-  [[22, 16, -1], [26, 24, 2], [36, 32, 1], [40, 44, -2]],
-  [[22, 22, 1], [26, 18, -2], [36, 40, -1], [40, 36, 2]],
-  [[22, 26, 2], [26, 20, 1], [36, 36, 2], [40, 42, -1]],
-  [[22, 24, -2], [26, 28, -1], [36, 44, -2], [40, 34, 1]],
-  [[22, 18, -1], [26, 22, 2], [36, 34, 1], [40, 38, -2]],
-];
 
 function Panel(props: { onResize: (el: HTMLElement) => void }) {
   let el!: HTMLDivElement;
