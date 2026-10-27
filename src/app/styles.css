@@ -11,6 +11,8 @@
 .widget.flip-x { align-items: flex-end; }
 /* 靠近屏幕底边：面板向上展开，猫在下 */
 .widget.flip-y { flex-direction: column-reverse; }
+/* 窗口几何与翻转布局切换期间隐藏，避免猫闪现到错误位置 */
+.widget.hiding { visibility: hidden; }
 
 .cat {
   display: block;

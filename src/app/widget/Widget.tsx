@@ -26,6 +26,13 @@ export function Widget() {
   const [flipX, setFlipX] = createSignal(false);
   const [flipY, setFlipY] = createSignal(false);
 
+  const [hiding, setHiding] = createSignal(false);
+  /** 等待新布局绘制完成（两帧）后取消隐藏 */
+  const reveal = () =>
+    new Promise<void>((res) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => { setHiding(false); res(); })),
+    );
+
   // 当前窗口逻辑尺寸
   let curW = CAT, curH = CAT, lastPanelH = 0;
 
@@ -50,8 +57,10 @@ export function Widget() {
     const area = mon ? (mon.workArea ?? { position: mon.position, size: mon.size }) : null;
     const fx = !!area && x + w * sf > area.position.x + area.size.width;
     const fy = !!area && y + h * sf > area.position.y + area.size.height;
-    setFlipX(fx);
-    setFlipY(fy);
+    // 翻转方向变化时，猫在窗口内的对齐方式会改变；窗口缩放/移动与 DOM 重排并非原子，
+    // 中间帧里猫会跳到错误位置，所以这段时间先隐藏，几何和布局都就位后再显示
+    const flipChanged = fx !== flipX() || fy !== flipY();
+    if (flipChanged) setHiding(true);
     await win.setSize(new LogicalSize(w, h));
     curW = w;
     curH = h;
@@ -59,19 +68,26 @@ export function Widget() {
       Math.round(x - (fx ? (w - CAT) * sf : 0)),
       Math.round(y - (fy ? (h - CAT) * sf : 0)),
     ));
+    setFlipX(fx);
+    setFlipY(fy);
+    if (flipChanged) await reveal();
   };
 
   const collapse = async () => {
     const { x, y } = await catAnchor();
     // 先通知后端面板已收起，使接下来的 Moved 事件按猫的位置保存
     await invoke("set_panel_open", { open: false });
+    // 翻转展开时，先重置 flip 会让猫在仍是宽窗口里瞬间跳到左侧，故窗口收好后再重置
+    const flipped = flipX() || flipY();
+    if (flipped) setHiding(true);
     setExpanded(false);
-    setFlipX(false);
-    setFlipY(false);
     lastPanelH = 0;
     await win.setSize(new LogicalSize(CAT, CAT));
     curW = curH = CAT;
     await win.setPosition(new PhysicalPosition(x, y));
+    setFlipX(false);
+    setFlipY(false);
+    if (flipped) await reveal();
   };
 
   const toggle = () => {
@@ -115,7 +131,7 @@ export function Widget() {
   return (
     <div
       class="widget"
-      classList={{ "flip-x": flipX(), "flip-y": flipY() }}
+      classList={{ "flip-x": flipX(), "flip-y": flipY(), hiding: hiding() }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
