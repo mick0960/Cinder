@@ -5,7 +5,7 @@ mod metrics;
 mod modules;
 mod updater;
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 pub const REPO_URL: &str = "https://github.com/mick0960/Cinder";
 
@@ -67,16 +67,18 @@ pub fn run() {
                 return;
             }
             if let tauri::WindowEvent::Moved(p) = event {
-                // 面板展开时窗口可能为避开屏幕边缘而偏移，此时的坐标不是猫的位置，
-                // 收起后前端会把窗口放回猫的位置，届时再保存
-                if !metrics::panel_open() {
-                    config::set_window_pos(window.app_handle(), p.x, p.y);
+                config::set_window_pos(window.app_handle(), p.x, p.y);
+                // 面板窗口跟随图标
+                if metrics::panel_open() {
+                    let _ = window.app_handle().emit_to("panel", "panel://anchor-moved", ());
                 }
             }
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_config,
             commands::set_panel_open,
+            commands::toggle_panel,
+            commands::is_panel_open,
             commands::set_widget_rect,
             commands::popup_widget_menu,
             commands::open_settings,

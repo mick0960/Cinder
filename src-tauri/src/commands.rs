@@ -13,8 +13,7 @@ pub fn get_config(state: State<AppState>) -> config::AppConfig {
     state.0.read().unwrap().clone()
 }
 
-/// 一次性设置窗口的位置和大小（物理像素）。
-/// 分开调用 setSize / setPosition 时，两步之间窗口会短暂处于"新尺寸 + 旧位置"，图标会闪动偏移。
+/// 一次性设置调用方窗口的位置和大小（物理像素），避免 setSize / setPosition 分步造成中间帧。
 #[tauri::command]
 pub fn set_widget_rect(window: Window, x: i32, y: i32, w: i32, h: i32) -> Result<(), String> {
     #[cfg(windows)]
@@ -40,6 +39,53 @@ pub fn set_widget_rect(window: Window, x: i32, y: i32, w: i32, h: i32) -> Result
             .set_position(tauri::PhysicalPosition::new(x, y))
             .map_err(|e| e.to_string())
     }
+}
+
+const PANEL_LABEL: &str = "panel";
+
+/// 监控面板是独立窗口：悬浮图标窗口永远不改变大小和位置，点击时图标不会闪动或偏移。
+#[tauri::command]
+pub fn toggle_panel(app: AppHandle) -> Result<(), String> {
+    let open = !metrics::panel_open();
+    metrics::set_panel_open(&app, open);
+    if !open {
+        let _ = app.emit_to(PANEL_LABEL, "panel://hide", ());
+        if let Some(w) = app.get_webview_window(PANEL_LABEL) {
+            let _ = w.hide();
+        }
+        return Ok(());
+    }
+    if app.get_webview_window(PANEL_LABEL).is_some() {
+        let _ = app.emit_to(PANEL_LABEL, "panel://show", ());
+        return Ok(());
+    }
+    // 窗口先隐藏创建，由面板前端排好版、定位后再显示；新窗口挂载时自行读取 is_panel_open
+    let win = tauri::WebviewWindowBuilder::new(
+        &app,
+        PANEL_LABEL,
+        tauri::WebviewUrl::App("index.html".into()),
+    )
+    .title("Cinder 面板")
+    .inner_size(256.0, 64.0)
+    .resizable(false)
+    .decorations(false)
+    .transparent(true)
+    .shadow(false)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .focused(false)
+    .visible(false)
+    // 必须与其他窗口的 WebView2 启动参数一致，见 menu::open_settings
+    .additional_browser_args(crate::menu::WEBVIEW_ARGS)
+    .build()
+    .map_err(|e| e.to_string())?;
+    let _ = win.set_focusable(false);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn is_panel_open() -> bool {
+    metrics::panel_open()
 }
 
 #[tauri::command]
