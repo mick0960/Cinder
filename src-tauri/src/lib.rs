@@ -77,6 +77,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_config,
             commands::set_panel_open,
+            commands::set_widget_rect,
             commands::popup_widget_menu,
             commands::open_settings,
             commands::save_modules,

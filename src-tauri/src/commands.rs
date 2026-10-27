@@ -13,6 +13,35 @@ pub fn get_config(state: State<AppState>) -> config::AppConfig {
     state.0.read().unwrap().clone()
 }
 
+/// 一次性设置窗口的位置和大小（物理像素）。
+/// 分开调用 setSize / setPosition 时，两步之间窗口会短暂处于"新尺寸 + 旧位置"，图标会闪动偏移。
+#[tauri::command]
+pub fn set_widget_rect(window: Window, x: i32, y: i32, w: i32, h: i32) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER,
+        };
+        let hwnd = window.hwnd().map_err(|e| e.to_string())?;
+        let ok = unsafe {
+            SetWindowPos(hwnd.0 as _, std::ptr::null_mut(), x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE)
+        };
+        if ok == 0 {
+            return Err("SetWindowPos failed".into());
+        }
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        window
+            .set_size(tauri::PhysicalSize::new(w as u32, h as u32))
+            .map_err(|e| e.to_string())?;
+        window
+            .set_position(tauri::PhysicalPosition::new(x, y))
+            .map_err(|e| e.to_string())
+    }
+}
+
 #[tauri::command]
 pub fn set_panel_open(app: AppHandle, open: bool) {
     metrics::set_panel_open(&app, open);
