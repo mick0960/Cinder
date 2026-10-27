@@ -34,6 +34,17 @@ export interface ModuleOutput {
   text: string;
   value: number | null;
   color: string | null;
+  /** JSON 输出的多行条目；存在时组件逐条渲染，忽略 style */
+  items?: ModuleItem[] | null;
+}
+
+export interface ModuleItem {
+  /** 相邻条目 group 相同时只显示一次分组标题 */
+  group: string | null;
+  label: string;
+  text: string;
+  value: number | null;
+  color: string | null;
 }
 
 export interface ModuleConfig {

@@ -4,10 +4,10 @@ import { listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow, monitorFromPoint } from "@tauri-apps/api/window";
 import { metrics, moduleOutputs, moduleHistory, modules, initStores } from "./stores";
-import { Sparkline, ProgressBar } from "../components/ModuleStyles";
+import { Sparkline, ProgressBar, usageColor } from "../components/ModuleStyles";
 import { BatteryMeter, CpuMeter, DiskMeter, MemMeter, NetMeter } from "./Meters";
 import "./panel.css";
-import type { ModuleConfig } from "../../types";
+import type { ModuleConfig, ModuleOutput } from "../../types";
 
 const CAT = 64;          // 猫的尺寸（逻辑像素）
 const PANEL_W = 240;     // 面板宽度
@@ -138,13 +138,16 @@ function ModuleRow(props: { mod: ModuleConfig }) {
   };
   const pct = () => {
     const v = out()?.value;
+    // JSON 输出自带 text 时优先显示（如“8.8 / 512 GB”），否则显示百分比
+    if (props.mod.format === "json" && out()?.text && !isErr()) return text();
     return v != null && !isErr() ? `${(v * 100).toFixed(0)}%` : text();
   };
+  const items = () => (isErr() ? undefined : out()?.items) ?? [];
 
   return (
-    <>
+    <Show when={items().length === 0} fallback={<ModuleItems mod={props.mod} out={out()!} />}>
       <div class="row module" title={isErr() ? out()!.text : undefined}>
-        <span class="label">{props.mod.name}</span>
+        <span class="label" title={props.mod.name}>{props.mod.name}</span>
         <Switch>
           <Match when={props.mod.style === "progress"}>
             <span class="value" classList={{ err: isErr() }}>{pct()}</span>
@@ -164,6 +167,41 @@ function ModuleRow(props: { mod: ModuleConfig }) {
       <Show when={props.mod.style === "progress"}>
         <ProgressBar value={isErr() ? 0 : (out()?.value ?? 0)} color={color()} />
       </Show>
+    </Show>
+  );
+}
+
+/** 多行模块：标题行 + 按 group 分组的条目，每条有数值时带进度条 */
+function ModuleItems(props: { mod: ModuleConfig; out: ModuleOutput }) {
+  const items = () => props.out.items ?? [];
+  return (
+    <>
+      <div class="row module">
+        <span class="label" title={props.mod.name}>{props.mod.name}</span>
+        <span class="value module-sum">{props.out.text}</span>
+      </div>
+      <For each={items()}>
+        {(it, i) => {
+          const color = () => it.color ?? (it.value != null ? usageColor(it.value) : undefined);
+          const newGroup = () => it.group != null && it.group !== items()[i() - 1]?.group;
+          return (
+            <>
+              <Show when={newGroup()}>
+                <div class="row module-group">{it.group}</div>
+              </Show>
+              <div class="row module item" classList={{ grouped: it.group != null }}>
+                <span class="label">{it.label}</span>
+                <span class="value" style={{ color: it.value == null ? undefined : color() }}>{it.text}</span>
+              </div>
+              <Show when={it.value != null}>
+                <div classList={{ "item-bar": true, grouped: it.group != null }}>
+                  <ProgressBar value={it.value!} color={color()} />
+                </div>
+              </Show>
+            </>
+          );
+        }}
+      </For>
     </>
   );
 }

@@ -30,6 +30,19 @@ pub struct ModuleOutput {
     pub text: String,
     pub value: Option<f64>,
     pub color: Option<String>,
+    /// JSON 输出可带多行条目（如多个账号的多个用量窗口），组件逐条渲染
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub items: Option<Vec<ModuleItem>>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(default)]
+pub struct ModuleItem {
+    pub group: Option<String>,
+    pub label: String,
+    pub text: String,
+    pub value: Option<f64>,
+    pub color: Option<String>,
 }
 
 #[derive(Deserialize, Default)]
@@ -38,6 +51,7 @@ struct JsonOut {
     text: String,
     value: Option<f64>,
     color: Option<String>,
+    items: Option<Vec<ModuleItem>>,
 }
 
 pub fn start(app: AppHandle) {
@@ -106,6 +120,7 @@ async fn run_loop(app: AppHandle, cfg: ModuleConfig, gen: u64) {
                     text: e,
                     value: None,
                     color: cfg.color.clone(),
+                    items: None,
                 }
             }
         };
@@ -133,6 +148,15 @@ pub fn parse_output(cfg: &ModuleConfig, raw: String) -> ModuleOutput {
                     text: v.text,
                     value: v.value,
                     color: v.color.or_else(|| cfg.color.clone()),
+                    items: v.items.map(|items| {
+                        items
+                            .into_iter()
+                            .map(|mut it| {
+                                it.color = it.color.or_else(|| cfg.color.clone());
+                                it
+                            })
+                            .collect()
+                    }),
                 }
             }
             Err(_) => {
@@ -142,6 +166,7 @@ pub fn parse_output(cfg: &ModuleConfig, raw: String) -> ModuleOutput {
                     text: "JSON 解析失败".into(),
                     value: None,
                     color: cfg.color.clone(),
+                    items: None,
                 }
             }
         }
@@ -159,6 +184,7 @@ pub fn parse_output(cfg: &ModuleConfig, raw: String) -> ModuleOutput {
         text,
         value,
         color: cfg.color.clone(),
+        items: None,
     }
 }
 

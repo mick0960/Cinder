@@ -409,6 +409,17 @@ export function Settings() {
                         <Show when={r.ok} fallback={<div class="err">{r.error}</div>}>
                           <div>文本：{r.output?.text || "—"}</div>
                           <div>数值：{r.output?.value ?? "—"}</div>
+                          <Show when={r.output?.items?.length}>
+                            <div>条目：{r.output.items.length}</div>
+                            <For each={r.output.items}>
+                              {(it: any) => (
+                                <div class="item">
+                                  {it.group ? `${it.group} / ` : ""}{it.label}：{it.text || "—"}
+                                  {it.value != null ? ` (${it.value})` : ""}
+                                </div>
+                              )}
+                            </For>
+                          </Show>
                         </Show>
                       </div>
                     )}

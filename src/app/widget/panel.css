@@ -151,8 +151,14 @@
   background-size: 30px 100%; animation: shimmer 2.8s ease-in-out infinite;
 }
 .row.module .value { transition: color 0.3s; }
+/* 模块名是纯文本：用 block 才能出省略号；名称与数值按长度一起收缩，不再固定占一半 */
+.row.module .label { display: block; flex: 0 1 auto; min-width: 2em; max-width: none; }
 .row.module .value.err { animation: err-shake 0.4s ease-in-out; }
 @keyframes err-shake { 25% { transform: translateX(-2px); } 75% { transform: translateX(2px); } }
+.row.module .value.module-sum { color: #8a8a92; }
+.row.module-group { color: #ddd; font-weight: 600; font-size: 11px; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.row.module.item { min-height: 16px; font-size: 11px; }
+.row.module.item.grouped, .item-bar.grouped { padding-left: 8px; }
 
 .sparkline { flex: none; display: block; overflow: visible; }
 .sparkline polyline { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
