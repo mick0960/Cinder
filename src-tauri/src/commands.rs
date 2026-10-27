@@ -44,8 +44,10 @@ pub fn set_widget_rect(window: Window, x: i32, y: i32, w: i32, h: i32) -> Result
 const PANEL_LABEL: &str = "panel";
 
 /// 监控面板是独立窗口：悬浮图标窗口永远不改变大小和位置，点击时图标不会闪动或偏移。
+///
+/// 必须是 async：同步命令跑在主线程上，Windows 下在其中创建窗口会死锁（整个应用无响应）。
 #[tauri::command]
-pub fn toggle_panel(app: AppHandle) -> Result<(), String> {
+pub async fn toggle_panel(app: AppHandle) -> Result<(), String> {
     let open = !metrics::panel_open();
     metrics::set_panel_open(&app, open);
     if !open {
