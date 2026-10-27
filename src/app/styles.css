@@ -1,0 +1,122 @@
+/* ---------- widget ---------- */
+.widget {
+  width: 100vw;
+  height: 100vh;
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+/* 靠近屏幕右边缘：面板向左展开，猫贴右 */
+.widget.flip-x { align-items: flex-end; }
+/* 靠近屏幕底边：面板向上展开，猫在下 */
+.widget.flip-y { flex-direction: column-reverse; }
+
+.cat {
+  display: block;
+  flex: none;
+  /* 浅色描边 + 轻投影：深色、浅色壁纸上都能看清 */
+  filter: drop-shadow(0 0 0.7px rgba(255, 255, 255, 0.95)) drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.35));
+}
+.cat .fur { fill: #3d3d3d; }
+.cat .eye { fill: #fff; }
+.cat .nose { fill: #1a1a1a; }
+.cat .tail { stroke: #3d3d3d; stroke-width: 3.5; fill: none; stroke-linecap: round; }
+.cat .leg { stroke: #3d3d3d; stroke-width: 3; fill: none; stroke-linecap: round; }
+
+.panel {
+  box-sizing: border-box;
+  flex: none;
+  width: 240px;
+  /* 上方与猫间隔 6px，左右和底部留出阴影空间（与 Widget.tsx 中常量对应） */
+  margin: 6px 8px 12px;
+  padding: 9px 12px 8px;
+  border-radius: 10px;
+  background: rgba(28, 28, 32, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: #eee;
+  font-size: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+.widget.flip-y .panel { margin: 12px 8px 6px; }
+
+.row { display: flex; justify-content: space-between; align-items: center; margin: 3px 0; gap: 8px; min-height: 18px; }
+.row .label { color: #9a9aa2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; max-width: 50%; }
+.row .value { white-space: nowrap; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.row .value .sub { color: #9a9aa2; }
+.row .value.err { color: #c77; }
+.row .value.net { display: flex; gap: 10px; }
+.row.net-row { margin-bottom: 9px; }
+.row .value .arrow { color: #9a9aa2; margin-right: 2px; }
+.row .value.spark { display: flex; align-items: center; gap: 6px; }
+.row .value .spark-text { overflow: hidden; text-overflow: ellipsis; }
+
+.divider { height: 1px; background: rgba(255, 255, 255, 0.08); margin: 7px -2px 6px; }
+
+.bar { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.1); margin: 2px 0 7px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s, background-color 0.3s; }
+
+.sparkline { flex: none; display: block; }
+.sparkline polyline { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+
+/* ---------- settings ---------- */
+html.settings-page,
+html.settings-page body { background: #1e1e22; overflow: auto; }
+
+.settings { display: flex; flex-direction: column; height: 100vh; color: #eee; font-size: 13px; }
+.cols { display: flex; flex: 1; min-height: 0; }
+.left { width: 240px; flex: none; border-right: 1px solid #333; display: flex; flex-direction: column; }
+.left-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; font-weight: 600; }
+.mlist { flex: 1; overflow-y: auto; }
+.mitem { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; cursor: pointer; border-bottom: 1px solid #2a2a2e; border-left: 2px solid transparent; }
+.mitem:hover { background: #2a2a2e; }
+.mitem.active { background: #313136; border-left-color: #0a84ff; }
+.mname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mstyle { color: #888; font-size: 11px; flex: none; }
+.del { background: none; border: 1px solid transparent; border-radius: 4px; color: #888; cursor: pointer; font: inherit; font-size: 15px; line-height: 1; padding: 2px 6px; flex: none; }
+.del:hover { color: #f66; }
+.del.confirm { font-size: 11px; color: #fff; background: #c42b1c; border-color: #c42b1c; padding: 3px 6px; }
+
+.right { flex: 1; min-width: 0; padding: 14px 16px; overflow-y: auto; }
+.form { display: flex; flex-direction: column; gap: 12px; }
+/* 固定行高：中英文混排时（如 “Shell” 与 “展示样式”）两列标签保持对齐 */
+.form label { display: flex; flex-direction: column; gap: 5px; color: #aaa; min-width: 0; line-height: 18px; }
+.form input, .form textarea, .form select {
+  box-sizing: border-box; width: 100%; height: 32px; line-height: normal;
+  background: #2a2a2e; color: #eee; border: 1px solid #444; border-radius: 6px; padding: 5px 8px; font: inherit;
+}
+.form textarea { height: auto; font-family: Consolas, "Cascadia Mono", monospace; resize: vertical; line-height: 1.5; }
+.form input[type="color"] { width: 44px; padding: 2px 4px; cursor: pointer; flex: none; }
+.form input::placeholder { color: #666; }
+.color-row { display: flex; align-items: center; gap: 10px; }
+.hint { color: #888; font-family: Consolas, monospace; font-size: 12px; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+
+.btnrow { display: flex; gap: 8px; }
+.btnrow button, .left-head button, .footer button {
+  background: #2a2a2e; color: #eee; border: 1px solid #444; border-radius: 6px; padding: 6px 14px; cursor: pointer; font: inherit;
+}
+button:hover:not(:disabled) { border-color: #666; }
+button:disabled { opacity: 0.55; cursor: default; }
+button.link { background: none; border: none; color: #4cc2ff; cursor: pointer; padding: 0; font: inherit; font-size: 12px; }
+button.link:hover { text-decoration: underline; }
+
+/* 键盘焦点可见 */
+.settings :focus { outline: none; }
+.settings :focus-visible { outline: 2px solid #0a84ff; outline-offset: 1px; }
+.form input:focus, .form textarea:focus, .form select:focus { border-color: #0a84ff; }
+
+.footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid #333; }
+.footer .primary { background: #0078d4; border-color: #0078d4; flex: none; }
+.footer .primary:hover { background: #1a86dd; }
+.status { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status.info { color: #aaa; }
+.status.ok { color: #4cd97b; }
+.status.warn { color: #ffb547; }
+.status.error { color: #ff6b6b; }
+
+.test-result { background: #2a2a2e; border-left: 3px solid #4cd97b; border-radius: 6px; padding: 10px 12px; font-family: Consolas, monospace; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+.test-result.fail { border-left-color: #ff6b6b; }
+.test-result .meta { color: #888; }
+.test-result .err { color: #ff6b6b; }
+.empty { color: #777; padding: 24px; text-align: center; }
