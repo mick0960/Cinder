@@ -3,6 +3,7 @@ use std::time::Instant;
 use tauri::{AppHandle, Emitter, Manager, State, Window};
 
 use crate::config::{self, AppState, ModuleConfig, RunnerConfig};
+use crate::memclean;
 use crate::menu;
 use crate::metrics;
 use crate::modules;
@@ -149,6 +150,14 @@ pub async fn test_module(cfg: ModuleConfig) -> Result<serde_json::Value, String>
             "error": e,
         }),
     })
+}
+
+/// 枚举并裁剪几百个进程可能耗时数百毫秒，放到阻塞线程池里，不占主线程
+#[tauri::command]
+pub async fn clean_memory() -> Result<memclean::CleanResult, String> {
+    tauri::async_runtime::spawn_blocking(memclean::clean)
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

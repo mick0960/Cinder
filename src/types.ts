@@ -21,6 +21,13 @@ export interface MetricsSnapshot {
   ts: number;
 }
 
+export interface CleanResult {
+  before_mb: number;
+  after_mb: number;
+  freed_mb: number;
+  trimmed: number;
+}
+
 export interface ModuleOutput {
   id: string;
   kind: "ok" | "error";

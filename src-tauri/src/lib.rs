@@ -1,5 +1,6 @@
 mod commands;
 mod config;
+mod memclean;
 mod menu;
 mod metrics;
 mod modules;
@@ -92,7 +93,8 @@ pub fn run() {
             commands::install_update,
             commands::dismiss_update,
             commands::set_update_auto,
-            commands::open_repo
+            commands::open_repo,
+            commands::clean_memory
         ])
         .run(tauri::generate_context!())
         .expect("error while running Cinder");
