@@ -148,7 +148,7 @@
 .swatch.custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; padding: 0; border: 0; }
 
 .btnrow { display: flex; gap: 8px; align-items: center; }
-.btnrow button, .left-head button, .footer button {
+.btnrow button, .left-head button, .footer button, .upd button {
   background: var(--bg-2); color: #eee; border: 1px solid #44444b; border-radius: 7px; padding: 6px 14px; cursor: pointer; font: inherit;
 }
 .settings button:hover:not(:disabled) { border-color: #66666e; }

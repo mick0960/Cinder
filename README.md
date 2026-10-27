@@ -13,6 +13,17 @@
 - **自动更新**：后台静默下载新版本，下载完成后弹出气泡，由你决定立即重启更新还是下次再说；也可以切换为手动更新。
 - 低占用：面板收起时降低采样频率。
 
+## 截图
+
+<p align="center">
+  <img src="assets/screenshots/panel.png" width="264" alt="监控面板" />
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/settings.png" width="560" alt="监控模块设置" />
+  <img src="assets/screenshots/about.png" width="560" alt="关于与更新" />
+</p>
+
 ## 安装
 
 ### 方式一：下载安装包（推荐）
