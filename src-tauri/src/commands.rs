@@ -13,6 +13,83 @@ pub fn get_config(state: State<AppState>) -> config::AppConfig {
     state.0.read().unwrap().clone()
 }
 
+/// 一次性设置调用方窗口的位置和大小（物理像素），避免 setSize / setPosition 分步造成中间帧。
+#[tauri::command]
+pub fn set_widget_rect(window: Window, x: i32, y: i32, w: i32, h: i32) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER,
+        };
+        let hwnd = window.hwnd().map_err(|e| e.to_string())?;
+        let ok = unsafe {
+            SetWindowPos(hwnd.0 as _, std::ptr::null_mut(), x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE)
+        };
+        if ok == 0 {
+            return Err("SetWindowPos failed".into());
+        }
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        window
+            .set_size(tauri::PhysicalSize::new(w as u32, h as u32))
+            .map_err(|e| e.to_string())?;
+        window
+            .set_position(tauri::PhysicalPosition::new(x, y))
+            .map_err(|e| e.to_string())
+    }
+}
+
+const PANEL_LABEL: &str = "panel";
+
+/// 监控面板是独立窗口：悬浮图标窗口永远不改变大小和位置，点击时图标不会闪动或偏移。
+///
+/// 必须是 async：同步命令跑在主线程上，Windows 下在其中创建窗口会死锁（整个应用无响应）。
+#[tauri::command]
+pub async fn toggle_panel(app: AppHandle) -> Result<(), String> {
+    let open = !metrics::panel_open();
+    metrics::set_panel_open(&app, open);
+    if !open {
+        let _ = app.emit_to(PANEL_LABEL, "panel://hide", ());
+        if let Some(w) = app.get_webview_window(PANEL_LABEL) {
+            let _ = w.hide();
+        }
+        return Ok(());
+    }
+    if app.get_webview_window(PANEL_LABEL).is_some() {
+        let _ = app.emit_to(PANEL_LABEL, "panel://show", ());
+        return Ok(());
+    }
+    // 窗口先隐藏创建，由面板前端排好版、定位后再显示；新窗口挂载时自行读取 is_panel_open
+    let win = tauri::WebviewWindowBuilder::new(
+        &app,
+        PANEL_LABEL,
+        tauri::WebviewUrl::App("index.html".into()),
+    )
+    .title("Cinder 面板")
+    .inner_size(256.0, 64.0)
+    .resizable(false)
+    .decorations(false)
+    .transparent(true)
+    .shadow(false)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .focused(false)
+    .visible(false)
+    // 必须与其他窗口的 WebView2 启动参数一致，见 menu::open_settings
+    .additional_browser_args(crate::menu::WEBVIEW_ARGS)
+    .build()
+    .map_err(|e| e.to_string())?;
+    let _ = win.set_focusable(false);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn is_panel_open() -> bool {
+    metrics::panel_open()
+}
+
 #[tauri::command]
 pub fn set_panel_open(app: AppHandle, open: bool) {
     metrics::set_panel_open(&app, open);
