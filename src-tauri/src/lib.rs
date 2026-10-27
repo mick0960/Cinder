@@ -11,6 +11,12 @@ pub const REPO_URL: &str = "https://github.com/mick0960/Cinder";
 
 pub fn run() {
     tauri::Builder::default()
+        // 单实例插件必须最先注册；重复启动时只把已有的悬浮窗带到前台
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(win) = app.get_webview_window("widget") {
+                let _ = win.show();
+            }
+        }))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let cfg = config::load_or_default(app.handle());
