@@ -78,6 +78,18 @@
   background-size: 40px 100%; animation: shimmer 3.2s ease-in-out infinite; transition: width 0.4s;
 }
 @keyframes shimmer { 0% { background-position: -40px 0; } 60%, 100% { background-position: 260px 0; } }
+/* 悬停提示「清理内存」：热区上下各放大 3px，负 margin 抵消，不改变面板高度 */
+.ram-wrap { position: relative; padding: 3px 0; margin: -3px 0; cursor: pointer; }
+.ram-wrap .ram { transition: filter 0.15s; }
+.ram-wrap:hover .ram, .ram-wrap.shown .ram { filter: brightness(0.55); }
+.ram-tip {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none;
+  padding: 1px 8px; border-radius: 8px; background: rgba(20, 20, 24, 0.9); border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #eee; font-size: 10.5px; line-height: 14px; white-space: nowrap; opacity: 0; transition: opacity 0.15s;
+}
+.ram-wrap:hover .ram-tip, .ram-wrap.shown .ram-tip { opacity: 1; }
+.ram-wrap.busy { cursor: progress; }
+.ram-wrap.busy .ram::after { animation-duration: 0.8s; }
 
 /* ---------- 电池 ---------- */
 .battery {

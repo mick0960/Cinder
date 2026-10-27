@@ -1,7 +1,8 @@
 import { createEffect, createSignal, For, Index, on, onCleanup, onMount, Show } from "solid-js";
+import { invoke } from "@tauri-apps/api/core";
 import { metricHistory, fmtRate, fmtMb } from "./stores";
 import { usageColor, batteryColor } from "../components/ModuleStyles";
-import type { BatteryInfo, DiskInfo, MetricsSnapshot } from "../../types";
+import type { BatteryInfo, CleanResult, DiskInfo, MetricsSnapshot } from "../../types";
 
 /** 面板内容区宽度：240 - 左右 padding 12*2 - 边框 1*2 */
 const INNER_W = 214;
@@ -203,15 +204,45 @@ export function CpuMeter(props: { m: MetricsSnapshot | null }) {
   );
 }
 
-/* ---------- 内存：内存条颗粒逐格点亮，带流光 ---------- */
+/* ---------- 内存：内存条颗粒逐格点亮，带流光；悬停点击可清理 ---------- */
 
 const RAM_CELLS = 24;
 const CELL_IDX = Array.from({ length: RAM_CELLS }, (_, i) => i);
+const CLEAN_TIP_MS = 2500;
+
+type CleanState = "idle" | "busy" | "err" | { freed: number };
 
 export function MemMeter(props: { m: MetricsSnapshot | null }) {
   const ratio = () => (props.m && props.m.mem_total_mb > 0 ? props.m.mem_used_mb / props.m.mem_total_mb : 0);
   const lit = () => Math.round(clamp(ratio(), 0, 1) * RAM_CELLS);
   const pct = useTween(() => ratio() * 100);
+
+  const [clean, setClean] = createSignal<CleanState>("idle");
+  let timer = 0;
+  onCleanup(() => clearTimeout(timer));
+  const finish = (s: CleanState) => {
+    setClean(s);
+    timer = window.setTimeout(() => setClean("idle"), CLEAN_TIP_MS);
+  };
+  const run = async () => {
+    if (clean() === "busy") return;
+    clearTimeout(timer);
+    setClean("busy");
+    try {
+      const r = await invoke<CleanResult>("clean_memory");
+      finish({ freed: r.freed_mb });
+    } catch {
+      finish("err");
+    }
+  };
+  const tip = () => {
+    const s = clean();
+    if (s === "idle") return "清理内存";
+    if (s === "busy") return "清理中…";
+    if (s === "err") return "清理失败";
+    return s.freed < 1 ? "内存已是最佳状态" : `已释放 ${fmtMb(s.freed)}`;
+  };
+
   return (
     <section class="sec mem" style={{ "--c": usageColor(ratio()), "--fill": `${(lit() / RAM_CELLS) * 100}%` }}>
       <div class="row">
@@ -221,15 +252,18 @@ export function MemMeter(props: { m: MetricsSnapshot | null }) {
           <span class="pct">{pct().toFixed(0)}%</span>
         </span>
       </div>
-      <div class="ram">
-        <For each={CELL_IDX}>
-          {(i) => (
-            <i
-              classList={{ on: i < lit(), head: i === lit() - 1 }}
-              style={{ "transition-delay": `${i * 14}ms`, opacity: i < lit() ? 0.55 + (0.45 * (i + 1)) / RAM_CELLS : undefined }}
-            />
-          )}
-        </For>
+      <div class="ram-wrap" classList={{ busy: clean() === "busy", shown: clean() !== "idle" }} onClick={run}>
+        <div class="ram">
+          <For each={CELL_IDX}>
+            {(i) => (
+              <i
+                classList={{ on: i < lit(), head: i === lit() - 1 }}
+                style={{ "transition-delay": `${i * 14}ms`, opacity: i < lit() ? 0.55 + (0.45 * (i + 1)) / RAM_CELLS : undefined }}
+              />
+            )}
+          </For>
+        </div>
+        <span class="ram-tip">{tip()}</span>
       </div>
     </section>
   );
