@@ -1,8 +1,8 @@
 use std::time::Instant;
 
-use tauri::{AppHandle, Emitter, State, Window};
+use tauri::{AppHandle, Emitter, Manager, State, Window};
 
-use crate::config::{self, AppState, ModuleConfig};
+use crate::config::{self, AppState, ModuleConfig, RunnerConfig};
 use crate::menu;
 use crate::metrics;
 use crate::modules;
@@ -38,6 +38,20 @@ pub fn save_modules(app: AppHandle, modules: Vec<ModuleConfig>) -> Result<(), St
     // 通知悬浮窗刷新模块列表，无需重启
     let _ = app.emit_to("widget", "config://modules", &modules);
     Ok(())
+}
+
+#[tauri::command]
+pub fn save_runners(app: AppHandle, runners: Vec<RunnerConfig>) -> Result<(), String> {
+    config::set_runners(&app, runners.clone());
+    let current = app.state::<AppState>().0.read().unwrap().character.clone();
+    let _ = app.emit("config://runners", &runners);
+    let _ = app.emit("character://changed", current);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_character(app: AppHandle, character: String) {
+    config::set_character(&app, &character);
 }
 
 #[tauri::command]

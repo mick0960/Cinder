@@ -1,0 +1,151 @@
+/* ---------- widget 面板 ---------- */
+.panel {
+  box-sizing: border-box;
+  flex: none;
+  width: 240px;
+  /* 上方与猫间隔 6px，左右和底部留出阴影空间（与 Widget.tsx 中常量对应） */
+  margin: 6px 8px 12px;
+  padding: 7px 12px 5px;
+  border-radius: 12px;
+  background:
+    radial-gradient(120% 60% at 0% 0%, rgba(76, 194, 255, 0.07), transparent 60%),
+    linear-gradient(180deg, rgba(36, 36, 42, 0.96), rgba(24, 24, 28, 0.96));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #eee;
+  font-size: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transform-origin: 20px 0;
+  animation: panel-in 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards;
+}
+.widget.flip-x .panel { transform-origin: calc(100% - 20px) 0; }
+.widget.flip-y .panel { margin: 12px 8px 6px; transform-origin: 20px 100%; animation-name: panel-in-up; }
+.widget.flip-x.flip-y .panel { transform-origin: calc(100% - 20px) 100%; }
+@keyframes panel-in { from { opacity: 0; transform: translateY(-8px) scale(0.92); } }
+@keyframes panel-in-up { from { opacity: 0; transform: translateY(8px) scale(0.92); } }
+
+/* 各区块依次浮现 */
+.sec { padding: 3px 0 5px; animation: sec-in 0.32s ease-out backwards; }
+.sec + .sec { border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 5px; }
+.sec:nth-child(2) { animation-delay: 40ms; }
+.sec:nth-child(3) { animation-delay: 80ms; }
+.sec:nth-child(4) { animation-delay: 120ms; }
+.sec:nth-child(5) { animation-delay: 160ms; }
+.sec:nth-child(n + 6) { animation-delay: 200ms; }
+@keyframes sec-in { from { opacity: 0; transform: translateX(-6px); } }
+
+.row { display: flex; justify-content: space-between; align-items: center; margin: 2px 0; gap: 8px; min-height: 18px; }
+.row .label { color: #9a9aa2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; max-width: 50%; display: flex; align-items: center; gap: 5px; }
+.row .value { white-space: nowrap; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.row .value.big { font-size: 14px; font-weight: 600; color: var(--c); transition: color 0.4s; }
+.row .value.big small { font-size: 10px; font-weight: 400; margin-left: 1px; opacity: 0.8; }
+.row .value .sub { color: #9a9aa2; }
+.row .value .pct { color: var(--c); margin-left: 6px; font-weight: 600; transition: color 0.4s; }
+.row .value.err { color: #c77; }
+.row .value.spark { display: flex; align-items: center; gap: 6px; }
+.row .value .spark-text { overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- 图标 ---------- */
+.ico { flex: none; overflow: visible; }
+.ico .body, .ico .pins, .ico .wave { fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; }
+.ico .pins { opacity: 0.6; }
+.ico .fillc { fill: currentColor; }
+.sec .ico { color: var(--c, #9a9aa2); transition: color 0.4s; }
+
+/* CPU：芯片核心按负载频率跳动，满载时轻微抖动 */
+.chip .core { fill: var(--c); transform-box: fill-box; transform-origin: center; animation: core-beat var(--beat, 2s) ease-in-out infinite; }
+@keyframes core-beat { 0%, 100% { opacity: 0.45; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.12); } }
+.cpu.hot .chip { animation: jitter 0.25s linear infinite; }
+.cpu.hot .value.big { text-shadow: 0 0 8px var(--c); }
+@keyframes jitter { 25% { transform: translate(0.5px, -0.4px); } 50% { transform: translate(-0.4px, 0.4px); } 75% { transform: translate(0.4px, 0.5px); } }
+
+/* ---------- 实时滚动图 ---------- */
+.live-chart { display: block; margin: 2px 0 1px; overflow: hidden; border-radius: 4px; background: rgba(255, 255, 255, 0.025); }
+.live-chart .grid { stroke: rgba(255, 255, 255, 0.07); stroke-width: 1; stroke-dasharray: 2 3; }
+.live-chart .stroke { fill: none; stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; transition: stroke 0.4s; }
+.halo { transform-box: fill-box; transform-origin: center; animation: halo 1.6s ease-out infinite; }
+@keyframes halo { from { opacity: 0.6; transform: scale(0.6); } to { opacity: 0; transform: scale(2.2); } }
+
+/* ---------- 内存：颗粒 ---------- */
+.ram { position: relative; display: flex; gap: 2px; height: 9px; margin: 3px 0 1px; }
+.ram i { flex: 1; border-radius: 2px; background: rgba(255, 255, 255, 0.08); transition: background-color 0.3s, opacity 0.3s; }
+.ram i.on { background: var(--c); }
+.ram i.head { animation: cell-blink 1.4s ease-in-out infinite; }
+@keyframes cell-blink { 50% { opacity: 0.35; transform: scaleY(0.75); } }
+/* 流光只扫过已点亮的部分 */
+.ram::after {
+  content: ""; position: absolute; inset: 0 auto 0 0; width: var(--fill); pointer-events: none; border-radius: 2px;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.45) 50%, transparent 70%) no-repeat;
+  background-size: 40px 100%; animation: shimmer 3.2s ease-in-out infinite; transition: width 0.4s;
+}
+@keyframes shimmer { 0% { background-position: -40px 0; } 60%, 100% { background-position: 260px 0; } }
+
+/* ---------- 电池 ---------- */
+.battery {
+  position: relative; height: 13px; margin: 3px 4px 1px 0; border-radius: 4px;
+  border: 1.5px solid rgba(255, 255, 255, 0.28); padding: 1.5px; box-sizing: border-box;
+}
+.battery::after { content: ""; position: absolute; right: -5px; top: 3px; width: 2.5px; height: 4px; border-radius: 0 2px 2px 0; background: rgba(255, 255, 255, 0.28); }
+.bat-fill { height: 100%; border-radius: 2px; background-color: var(--c); transition: width 0.6s cubic-bezier(0.3, 0.8, 0.3, 1), background-color 0.4s; }
+.bat-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 600; color: #fff; text-shadow: 0 0 3px rgba(0, 0, 0, 0.9); font-variant-numeric: tabular-nums; }
+.bat.charging .bat-fill {
+  background-image: repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.28) 0 4px, transparent 4px 8px);
+  background-size: 11.3px 100%; animation: stripes 0.6s linear infinite;
+}
+@keyframes stripes { to { background-position: 11.3px 0; } }
+.bat .zap { color: var(--c); animation: zap 1.2s ease-in-out infinite; }
+.bat .dim { opacity: 0.55; }
+@keyframes zap { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.85); } }
+.bat.low .bat-fill { animation: low-blink 1s steps(2, jump-none) infinite; }
+.bat.low .battery { border-color: rgba(255, 93, 93, 0.6); }
+@keyframes low-blink { 50% { opacity: 0.25; } }
+
+/* ---------- 网络 ---------- */
+.sec.net .ico { color: #4cc2ff; }
+.row .value.net { display: flex; gap: 10px; }
+.rate { display: inline-flex; align-items: center; }
+.rate .arrow { display: inline-block; margin-right: 2px; color: #9a9aa2; transition: color 0.3s; }
+.rate.down.active .arrow { color: #4cc2ff; animation: flow-down var(--flow) ease-in infinite; }
+.rate.up.active .arrow { color: #c58cff; animation: flow-up var(--flow) ease-in infinite; }
+@keyframes flow-down { 0% { transform: translateY(-4px); opacity: 0; } 40% { opacity: 1; } 100% { transform: translateY(3px); opacity: 0; } }
+@keyframes flow-up { 0% { transform: translateY(4px); opacity: 0; } 40% { opacity: 1; } 100% { transform: translateY(-3px); opacity: 0; } }
+
+/* ---------- 磁盘：环形 ---------- */
+.rings { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin: 2px 0 1px; }
+.disk { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.disk svg { flex: none; overflow: visible; }
+.disk .track { fill: none; stroke: rgba(255, 255, 255, 0.09); stroke-width: 3.5; }
+.disk .arc {
+  fill: none; stroke: var(--c); stroke-width: 3.5; stroke-linecap: round;
+  transform: rotate(-90deg); transform-origin: 18px 18px;
+  transition: stroke-dashoffset 0.9s cubic-bezier(0.3, 0.8, 0.3, 1), stroke 0.4s;
+}
+.disk .platter { fill: none; stroke: rgba(255, 255, 255, 0.16); stroke-width: 0.8; stroke-dasharray: 2 2.7; transform-origin: 18px 18px; animation: spin 9s linear infinite; }
+.disk text { fill: #eee; font-size: 9px; font-weight: 600; text-anchor: middle; dominant-baseline: middle; font-variant-numeric: tabular-nums; }
+.disk-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.disk-name { color: #ddd; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.disk-size { color: #8a8a92; font-size: 10.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- 自定义模块 ---------- */
+.bar { height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); margin: 2px 0 6px; overflow: hidden; }
+.bar-fill {
+  position: relative; height: 100%; border-radius: 3px; overflow: hidden;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--c) 55%, transparent), var(--c));
+  transition: width 0.5s cubic-bezier(0.3, 0.8, 0.3, 1);
+}
+.bar-fill::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.5) 50%, transparent 70%) no-repeat;
+  background-size: 30px 100%; animation: shimmer 2.8s ease-in-out infinite;
+}
+.row.module .value { transition: color 0.3s; }
+.row.module .value.err { animation: err-shake 0.4s ease-in-out; }
+@keyframes err-shake { 25% { transform: translateX(-2px); } 75% { transform: translateX(2px); } }
+
+.sparkline { flex: none; display: block; overflow: visible; }
+.sparkline polyline { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.sparkline circle { fill: currentColor; }
+
+@media (prefers-reduced-motion: reduce) {
+  .panel, .panel *, .panel *::after { animation: none !important; transition: none !important; }
+}

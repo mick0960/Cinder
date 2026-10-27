@@ -43,9 +43,17 @@ export interface ModuleConfig {
   unit: string | null;
 }
 
+export interface RunnerConfig {
+  id: string;
+  name: string;
+  /** 按顺序循环播放的帧（data URL）；只有一帧时直接显示（GIF 可自带动画） */
+  frames: string[];
+}
+
 export interface AppConfig {
   window: { x: number; y: number };
   character: string;
   metrics: { panelIntervalMs: number; idleIntervalMs: number };
   modules: ModuleConfig[];
+  runners: RunnerConfig[];
 }

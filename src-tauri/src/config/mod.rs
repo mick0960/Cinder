@@ -69,6 +69,15 @@ impl Default for ModuleConfig {
     }
 }
 
+/// 自定义角色（runner）：一组按顺序循环播放的图片帧（data URL）
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub struct RunnerConfig {
+    pub id: String,
+    pub name: String,
+    pub frames: Vec<String>,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default, rename_all = "camelCase")]
 pub struct AppConfig {
@@ -76,6 +85,7 @@ pub struct AppConfig {
     pub character: String,
     pub metrics: MetricsConfig,
     pub modules: Vec<ModuleConfig>,
+    pub runners: Vec<RunnerConfig>,
 }
 
 impl Default for AppConfig {
@@ -85,6 +95,7 @@ impl Default for AppConfig {
             character: "cat".into(),
             metrics: MetricsConfig::default(),
             modules: Vec::new(),
+            runners: Vec::new(),
         }
     }
 }
@@ -142,17 +153,36 @@ pub fn set_modules(app: &AppHandle, modules: Vec<ModuleConfig>) {
     let state = app.state::<AppState>();
     let mut cfg = state.0.write().unwrap();
     cfg.modules = modules;
+    let snapshot = cfg.clone();
     drop(cfg);
-    save(app, &state.0.read().unwrap());
+    save(app, &snapshot);
+}
+
+pub fn set_runners(app: &AppHandle, runners: Vec<RunnerConfig>) {
+    let snapshot = {
+        let state = app.state::<AppState>();
+        let mut cfg = state.0.write().unwrap();
+        cfg.runners = runners;
+        // 当前选中的自定义角色被删除时回退到默认猫
+        if let Some(id) = cfg.character.strip_prefix("custom:") {
+            if !cfg.runners.iter().any(|r| r.id == id) {
+                cfg.character = "cat".into();
+            }
+        }
+        cfg.clone()
+    };
+    save(app, &snapshot);
 }
 
 pub fn set_character(app: &AppHandle, character: &str) {
-    {
+    // 先释放写锁再保存：同一线程持有写锁时再取读锁会死锁（曾导致切换角色后程序卡死）
+    let snapshot = {
         let state = app.state::<AppState>();
         let mut cfg = state.0.write().unwrap();
         cfg.character = character.to_string();
-        save(app, &state.0.read().unwrap());
-    }
+        cfg.clone()
+    };
+    save(app, &snapshot);
     use tauri::Emitter;
     let _ = app.emit("character://changed", character);
 }

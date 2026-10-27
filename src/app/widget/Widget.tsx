@@ -3,10 +3,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize, PhysicalPosition } from "@tauri-apps/api/dpi";
 import {
-  metrics, moduleOutputs, moduleHistory, modules, character,
-  fmtRate, fmtMb, initStores, getSmoothCpu,
+  metrics, moduleOutputs, moduleHistory, modules, character, runners,
+  initStores, getSmoothCpu,
 } from "./stores";
-import { Sparkline, ProgressBar, usageColor, batteryColor } from "../components/ModuleStyles";
+import { Sparkline, ProgressBar } from "../components/ModuleStyles";
+import { BatteryMeter, CpuMeter, DiskMeter, MemMeter, NetMeter } from "./Meters";
+import "./panel.css";
 import type { ModuleConfig } from "../../types";
 
 const CAT = 64;          // 猫的尺寸（逻辑像素）
@@ -134,12 +136,12 @@ export function Widget() {
  * 动画时钟：独立于指标推送频率运行，每一帧根据当前平滑 CPU 决定下一帧间隔。
  * （旧实现每收到一次指标就重建 setInterval，间隔长于推送周期时动画会完全冻结）
  */
-function useFrameClock(frames: number) {
+function useFrameClock(frames: () => number) {
   const [frame, setFrame] = createSignal(0);
   let timer = 0;
   const tick = () => {
     const hidden = document.hidden;
-    if (!hidden) setFrame((f) => (f + 1) % frames);
+    if (!hidden) setFrame((f) => (f + 1) % Math.max(1, frames()));
     const cpu = Math.min(100, Math.max(0, getSmoothCpu()));
     const interval = hidden ? 2000 : Math.max(80, 800 - 720 * (cpu / 100));
     timer = window.setTimeout(tick, interval);
@@ -150,33 +152,63 @@ function useFrameClock(frames: number) {
 }
 
 function Cat(props: { character: () => string }) {
-  const frame = useFrameClock(LEG_FRAMES.length);
-  const bob = () => (frame() % 2 === 0 ? 0 : -1.5);
+  const custom = () => {
+    const id = props.character().startsWith("custom:") ? props.character().slice(7) : null;
+    const r = id ? runners().find((x) => x.id === id) : undefined;
+    return r && r.frames.length > 0 ? r : null;
+  };
+  return (
+    <Show when={custom()} fallback={<BuiltinCat character={props.character} />}>
+      {(r) => <CustomRunner frames={r().frames} />}
+    </Show>
+  );
+}
+
+function CustomRunner(props: { frames: string[] }) {
+  const frame = useFrameClock(() => props.frames.length);
+  return <img class="cat custom" width="64" height="64" draggable={false} src={props.frames[frame() % props.frames.length]} />;
+}
+
+function BuiltinCat(props: { character: () => string }) {
+  const frame = useFrameClock(() => LEG_FRAMES.length);
+  const bob = () => (frame() % 2 === 0 ? 0 : -1.2);
   const legs = () => LEG_FRAMES[frame()];
   const dog = () => props.character() === "dog";
   return (
-    <svg class="cat" viewBox="0 0 64 64" width="64" height="64">
+    <svg class="cat" classList={{ dog: dog() }} viewBox="0 0 64 64" width="64" height="64">
       <g transform={`translate(0 ${bob()})`}>
-        <path class="tail" d={dog() ? "M18 34 C14 30 13 23 16 19" : "M18 34 C10 32 7 24 12 19"} />
-        <ellipse cx="30" cy="36" rx="14" ry="7" class="fur" />
-        <circle cx="44" cy="28" r="6.5" class="fur" />
+        {/* 远侧的腿画在身体后面，近侧的腿画在前面，有层次感 */}
+        <For each={legs().slice(0, 2)}>
+          {(l) => <path class="leg far" d={`M${l[0]} 41 Q${(l[0] + l[1]) / 2 + l[2]} 46 ${l[1]} 53`} />}
+        </For>
+        <path class="tail" d={dog() ? "M17 35 C12 32 11 25 14 21" : "M17 36 C8 36 5 27 10 21 C12 19 14 20 14 22"} />
+        <ellipse cx="30" cy="36" rx="15" ry="8" class="fur" />
+        <ellipse cx="31" cy="39.5" rx="10" ry="4" class="belly" />
+        <For each={legs().slice(2)}>
+          {(l) => <path class="leg" d={`M${l[0]} 41 Q${(l[0] + l[1]) / 2 + l[2]} 46 ${l[1]} 53`} />}
+        </For>
+        <circle cx="45" cy="27" r="8" class="fur" />
         <Show
           when={dog()}
           fallback={
             <>
-              <path d="M40 23 l1.5 -5 3 4 z" class="fur" />
-              <path d="M46 22.5 l3 -4 1.5 5 z" class="fur" />
+              <path d="M38.5 24 L39 15.5 L45 21 Z" class="fur" />
+              <path d="M45 21 L51 15.5 L51.5 24 Z" class="fur" />
+              <path d="M40 21.5 L40.3 18.2 L43 20.7 Z" class="ear-in" />
+              <path d="M47 20.7 L49.7 18.2 L50 21.5 Z" class="ear-in" />
+              <path d="M44 30 q1 1.3 2 0 M47 30 q1 1.3 2 0" class="mouth" />
+              <path d="M49 28.5 l6 -1.2 M49 29.7 l6 1.2" class="whisker" />
+              <ellipse cx="48.8" cy="28" rx="1.1" ry="0.8" class="nose" />
             </>
           }
         >
-          <ellipse cx="39.5" cy="23.5" rx="2.4" ry="5" transform="rotate(-15 39.5 23.5)" class="fur" />
-          <ellipse cx="48.5" cy="23.5" rx="2.4" ry="5" transform="rotate(15 48.5 23.5)" class="fur" />
-          <ellipse cx="50.3" cy="29.2" rx="1.6" ry="1.2" class="nose" />
+          <ellipse cx="39" cy="24" rx="2.8" ry="6" transform="rotate(-18 39 24)" class="ear-dog" />
+          <ellipse cx="51" cy="24" rx="2.8" ry="6" transform="rotate(18 51 24)" class="ear-dog" />
+          <ellipse cx="50" cy="30" rx="3.6" ry="2.8" class="belly" />
+          <ellipse cx="51.5" cy="29" rx="1.6" ry="1.2" class="nose" />
         </Show>
-        <circle cx="46.5" cy="27" r="1.1" class="eye" />
-        <For each={legs()}>
-          {(l) => <path class="leg" d={`M${l[0]} 41 Q${(l[0] + l[1]) / 2 + l[2]} 46 ${l[1]} 52`} />}
-        </For>
+        <circle cx="46.5" cy="25.8" r="1.5" class="eye-w" />
+        <circle cx="46.9" cy="25.8" r="0.9" class="eye" />
       </g>
     </svg>
   );
@@ -190,8 +222,6 @@ const LEG_FRAMES: number[][][] = [
   [[22, 18, -1], [26, 22, 2], [36, 34, 1], [40, 38, -2]],
 ];
 
-const diskName = (mount: string) => mount.replace(/[\\/]+$/, "") || "/";
-
 function Panel(props: { onResize: (el: HTMLElement) => void }) {
   let el!: HTMLDivElement;
   onMount(() => {
@@ -201,55 +231,21 @@ function Panel(props: { onResize: (el: HTMLElement) => void }) {
   });
 
   const m = () => metrics();
-  const cpu = () => (m()?.cpu_percent ?? 0) / 100;
-  const mem = () => (m() && m()!.mem_total_mb > 0 ? m()!.mem_used_mb / m()!.mem_total_mb : 0);
 
   return (
     <div class="panel" ref={el}>
-      <div class="row"><span class="label">CPU</span><span class="value">{(cpu() * 100).toFixed(0)}%</span></div>
-      <ProgressBar value={cpu()} color={usageColor(cpu())} />
-
-      <div class="row"><span class="label">内存</span><span class="value">{m() ? `${fmtMb(m()!.mem_used_mb)} / ${fmtMb(m()!.mem_total_mb)}` : "—"}</span></div>
-      <ProgressBar value={mem()} color={usageColor(mem())} />
-
-      <Show when={m()?.battery}>
-        {(b) => (
-          <>
-            <div class="row">
-              <span class="label">电池</span>
-              <span class="value">
-                {(b().percent * 100).toFixed(0)}%
-                <Show when={b().charging}><span class="sub"> · 充电中</span></Show>
-              </span>
-            </div>
-            <ProgressBar value={b().percent} color={batteryColor(b().percent, b().charging)} />
-          </>
-        )}
+      <CpuMeter m={m()} />
+      <MemMeter m={m()} />
+      <Show when={m()?.battery}>{(b) => <BatteryMeter b={b()} />}</Show>
+      <NetMeter m={m()} />
+      <Show when={(m()?.disks.length ?? 0) > 0}>
+        <DiskMeter disks={m()!.disks} />
       </Show>
 
-      <div class="row net-row">
-        <span class="label">网络</span>
-        <span class="value net">
-          <span><span class="arrow">↓</span>{fmtRate(m()?.net_down_bps ?? 0)}</span>
-          <span><span class="arrow">↑</span>{fmtRate(m()?.net_up_bps ?? 0)}</span>
-        </span>
-      </div>
-
-      <For each={m()?.disks ?? []}>
-        {(d) => {
-          const ratio = () => (d.total_gb > 0 ? d.used_gb / d.total_gb : 0);
-          return (
-            <>
-              <div class="row"><span class="label">磁盘 {diskName(d.mount)}</span><span class="value">{d.used_gb.toFixed(0)} / {d.total_gb.toFixed(0)} GB</span></div>
-              <ProgressBar value={ratio()} color={usageColor(ratio())} />
-            </>
-          );
-        }}
-      </For>
-
       <Show when={modules().length > 0}>
-        <div class="divider" />
-        <For each={modules()}>{(mod) => <ModuleRow mod={mod} />}</For>
+        <section class="sec modules">
+          <For each={modules()}>{(mod) => <ModuleRow mod={mod} />}</For>
+        </section>
       </Show>
     </div>
   );
