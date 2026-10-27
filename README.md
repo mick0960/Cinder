@@ -130,12 +130,6 @@ if (Get-Process -Name Code -ErrorAction SilentlyContinue) { '运行中' } else {
 - 在 设置 → **关于** 可切换为**手动更新**（仅提示，由你决定是否下载），也可以随时点击“检查更新”。
 - 选择“下次再说”的版本不会再次打扰你，更新的版本发布后会再次提示。
 
-## 开发与发布
-
-- CI：push 到 `main` 与 PR 会运行类型检查、前端构建与 `cargo check`。
-- 发布：推送形如 `v0.2.0` 的 tag，GitHub Actions 会自动编译、签名并发布 Release（含自动更新所需的 `latest.json`）。
-- 首次配置：生成签名密钥 `npx tauri signer generate -w .tauri/key`，把公钥写入 `src-tauri/tauri.conf.json` 的 `plugins.updater.pubkey`，把私钥内容添加为仓库 Secret `TAURI_SIGNING_PRIVATE_KEY`（若设置了密码，另加 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`）。
-
 ## 技术栈
 
 [Tauri 2](https://tauri.app/)（Rust）+ [SolidJS](https://www.solidjs.com/) + Vite。
