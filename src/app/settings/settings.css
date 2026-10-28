@@ -286,5 +286,9 @@ button.link:hover { text-decoration: underline; }
 .seg-btn { flex: 1; min-width: 0; padding: 5px 8px; background: transparent; border: none; border-radius: 7px; color: #aaa; cursor: pointer; font: inherit; white-space: nowrap; }
 .seg-btn:hover { color: #fff; }
 .seg-btn.active { background: var(--bg-3); color: #fff; box-shadow: 0 0 0 1px var(--accent) inset; }
+
+.form label.check { flex-direction: row; align-items: flex-start; gap: 10px; cursor: pointer; color: #ddd; }
+.form label.check input[type="checkbox"] { width: auto; height: auto; padding: 0; margin-top: 3px; flex: none; accent-color: var(--accent); }
+.form label.check small { display: block; color: #999; margin-top: 2px; line-height: 1.5; }
 .help code, .form code { font: 11.5px Consolas, monospace; background: rgba(255, 255, 255, 0.07); border-radius: 4px; padding: 0 4px; }
 .color-chip { display: inline-block; width: 11px; height: 11px; margin: 0 2px; border-radius: 3px; vertical-align: -1px; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25); }

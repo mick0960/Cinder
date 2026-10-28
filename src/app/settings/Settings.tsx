@@ -15,8 +15,8 @@ const DELETE_CONFIRM_MS = 3000;
 
 type Status = { kind: "info" | "ok" | "warn" | "error"; text: string } | null;
 
-/** 列表里模块名旁边的小标签：非默认的类型 */
-const typeTag = (m: ModuleConfig) => (m.type === "command" ? null : TYPE_LABEL[m.type]);
+/** 列表里模块名旁边的小标签：非默认的类型 / 常驻进程 */
+const typeTag = (m: ModuleConfig) => (m.type === "command" ? (m.persistent ? "常驻" : null) : TYPE_LABEL[m.type]);
 
 export function Settings() {
   const [tab, setTab] = createSignal<"modules" | "runners" | "general" | "about">("modules");

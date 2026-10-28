@@ -1,7 +1,9 @@
 mod decode;
 mod http;
+mod job;
 mod ping;
 pub mod runner;
+mod stream;
 mod value;
 
 use serde::{Deserialize, Serialize};
@@ -17,11 +19,17 @@ use crate::metrics;
 static GEN: AtomicU64 = AtomicU64::new(0);
 static WAKE: OnceLock<Notify> = OnceLock::new();
 
+/// 面板收起后，常驻进程再保留这么久才被结束：反复展开 / 收起面板时不必每次重启进程
+const STREAM_GRACE: Duration = Duration::from_secs(20);
+/// 同一个常驻模块两次推送给前端的最小间隔：输出很密的进程不会拖垮前端
+const MIN_EMIT_GAP: Duration = Duration::from_millis(200);
+const MAX_BACKOFF: Duration = Duration::from_secs(60);
+
 fn wake_signal() -> &'static Notify {
     WAKE.get_or_init(Notify::new)
 }
 
-/// 唤醒所有模块循环：面板展开时立即刷新一次；重载时让旧循环尽快退出
+/// 唤醒所有模块循环：面板展开 / 收起时立即重新判断；重载时让旧循环尽快退出
 pub fn wake() {
     wake_signal().notify_waiters();
 }
@@ -105,9 +113,15 @@ fn spawn_all(app: &AppHandle, gen: u64) {
             continue;
         }
         let app = app.clone();
-        tauri::async_runtime::spawn(async move {
-            run_loop(app, m, gen).await;
-        });
+        if m.kind == "command" && m.persistent {
+            tauri::async_runtime::spawn(async move {
+                stream_loop(app, m, gen).await;
+            });
+        } else {
+            tauri::async_runtime::spawn(async move {
+                run_loop(app, m, gen).await;
+            });
+        }
     }
 }
 
@@ -162,6 +176,112 @@ async fn run_loop(app: AppHandle, cfg: ModuleConfig, gen: u64) {
     }
 }
 
+enum StreamEnd {
+    /// 配置已重载，本循环作废
+    Reload,
+    /// 面板收起超过宽限期且不再需要，进程已结束
+    Idle,
+    Failed(String),
+}
+
+/// 常驻进程模块：进程只启动一次，每输出一行刷新一次。
+/// 需要时才启动，面板收起 `STREAM_GRACE` 之后结束进程；进程退出或长时间无输出则退避重启。
+async fn stream_loop(app: AppHandle, cfg: ModuleConfig, gen: u64) {
+    let mut backoff = Duration::from_secs(2);
+    loop {
+        if GEN.load(Ordering::Relaxed) != gen {
+            return;
+        }
+        if !metrics::panel_open() {
+            idle_wait().await;
+            continue;
+        }
+        let started = Instant::now();
+        match stream_once(&app, &cfg, gen).await {
+            StreamEnd::Reload => return,
+            StreamEnd::Idle => backoff = Duration::from_secs(2),
+            StreamEnd::Failed(msg) => {
+                emit(&app, &error_output(&cfg, msg));
+                if started.elapsed() > Duration::from_secs(30) {
+                    backoff = Duration::from_secs(2);
+                }
+                tokio::select! {
+                    _ = tokio::time::sleep(backoff) => {}
+                    _ = wake_signal().notified() => {}
+                }
+                backoff = (backoff * 2).min(MAX_BACKOFF);
+            }
+        }
+    }
+}
+
+async fn stream_once(app: &AppHandle, cfg: &ModuleConfig, gen: u64) -> StreamEnd {
+    let mut stream = match stream::LineStream::spawn(cfg) {
+        Ok(s) => s,
+        Err(e) => return StreamEnd::Failed(e),
+    };
+    // 常驻模式下“超时”表示多久没有新的一行就判定进程卡死
+    let silence = Duration::from_millis(cfg.timeout_ms.clamp(500, 600_000));
+    let mut last_line = Instant::now();
+    let mut not_needed_since: Option<Instant> = None;
+    // 最近一行解析出的输出；面板收起期间到达的先攒着，展开时立即推送
+    let mut latest: Option<ModuleOutput> = None;
+    let mut unsent = false;
+    let mut last_emit: Option<Instant> = None;
+
+    loop {
+        if GEN.load(Ordering::Relaxed) != gen {
+            return StreamEnd::Reload;
+        }
+        let now = Instant::now();
+        let needed = metrics::panel_open();
+        if needed {
+            not_needed_since = None;
+        } else if not_needed_since.is_none() {
+            not_needed_since = Some(now);
+        }
+        if not_needed_since.is_some_and(|t| now.duration_since(t) >= STREAM_GRACE) {
+            return StreamEnd::Idle;
+        }
+        if now.duration_since(last_line) >= silence {
+            return StreamEnd::Failed(format!("{} 秒内没有输出，已重启", silence.as_secs()));
+        }
+        let gap_over = last_emit.is_none_or(|t| now.duration_since(t) >= MIN_EMIT_GAP);
+        if needed && unsent && gap_over {
+            if let Some(out) = &latest {
+                emit(app, out);
+                last_emit = Some(now);
+                unsent = false;
+            }
+        }
+
+        // 睡到最近的一个时间点：静默超时 / 宽限期结束 / 推送间隔结束；1s 兜底用来发现重载和展开
+        let mut next = (last_line + silence).min(now + Duration::from_secs(1));
+        if let Some(t) = not_needed_since {
+            next = next.min(t + STREAM_GRACE);
+        }
+        if needed && unsent {
+            if let Some(t) = last_emit {
+                next = next.min(t + MIN_EMIT_GAP);
+            }
+        }
+        tokio::select! {
+            line = stream.next_line() => match line {
+                Some(line) => {
+                    last_line = Instant::now();
+                    if !line.trim().is_empty() {
+                        latest = Some(parse_output(cfg, line));
+                        unsent = true;
+                    }
+                }
+                None => return StreamEnd::Failed(stream.exit_message().await),
+            },
+            _ = tokio::time::sleep_until(tokio::time::Instant::from_std(next)) => {}
+            _ = wake_signal().notified() => {}
+        }
+    }
+}
+
 /// 执行一次取值。轮询模块与“测试运行”共用；命令型走 shell，原生类型不经过 shell
 async fn fetch(cfg: &ModuleConfig) -> Result<ModuleOutput, String> {
     match cfg.kind.as_str() {
@@ -188,10 +308,14 @@ async fn fetch_gpu(cfg: &ModuleConfig) -> Result<Reading, String> {
     }
 }
 
-/// 设置页的“测试运行”
+/// 设置页的“测试运行”。常驻模式只等第一行输出，然后立即结束进程
 pub async fn test(cfg: &ModuleConfig) -> serde_json::Value {
     let t = Instant::now();
-    let res = fetch(cfg).await;
+    let res = if cfg.kind == "command" && cfg.persistent {
+        stream::first_output(cfg).await.map(|line| parse_output(cfg, line))
+    } else {
+        fetch(cfg).await
+    };
     let ms = t.elapsed().as_millis() as u64;
     match res {
         Ok(out) if out.kind == "error" => serde_json::json!({ "ok": false, "ms": ms, "error": out.text }),
@@ -309,9 +433,67 @@ mod tests {
         // 0.2.0 及以前保存的模块没有新增的字段
         let old = r#"{"id":"m1","type":"command","name":"x","command":"echo 1","shell":"powershell","intervalMs":5000,"timeoutMs":3000,"style":"text","format":"plain","color":null,"unit":null}"#;
         let m: ModuleConfig = serde_json::from_str(old).unwrap();
-        assert!(m.url.is_empty() && m.host.is_empty());
+        assert!(!m.persistent && m.url.is_empty());
         let cfg: crate::config::AppConfig = serde_json::from_str(r#"{"modules":[{"id":"a"}]}"#).unwrap();
         assert_eq!(cfg.modules[0].kind, "command");
+    }
+
+    /// 常驻进程：一次启动，连续产出多行；丢弃 LineStream 后进程被结束
+    #[tokio::test]
+    async fn stream_yields_one_update_per_line() {
+        let c = ModuleConfig {
+            kind: "command".into(),
+            shell: "cmd".into(),
+            // ping -n 4 约每秒一行；输出的行数多于我们读取的行数，用来验证提前丢弃会结束进程
+            command: "ping -n 6 127.0.0.1".into(),
+            persistent: true,
+            ..Default::default()
+        };
+        let mut s = stream::LineStream::spawn(&c).unwrap();
+        let mut got = 0;
+        while let Some(line) = tokio::time::timeout(Duration::from_secs(5), s.next_line()).await.unwrap() {
+            if line.contains("127.0.0.1") {
+                got += 1;
+            }
+            if got >= 3 {
+                break;
+            }
+        }
+        assert!(got >= 3);
+    }
+
+    #[tokio::test]
+    async fn stream_reports_exit_code_and_stderr() {
+        let c = ModuleConfig {
+            kind: "command".into(),
+            shell: "cmd".into(),
+            command: "echo boom 1>&2 & exit 7".into(),
+            persistent: true,
+            ..Default::default()
+        };
+        let mut s = stream::LineStream::spawn(&c).unwrap();
+        assert!(s.next_line().await.is_none());
+        let msg = s.exit_message().await;
+        assert!(msg.contains("退出码 7") && msg.contains("boom"), "{msg}");
+    }
+
+    #[tokio::test]
+    async fn test_run_of_persistent_module_stops_at_first_line() {
+        let c = ModuleConfig {
+            kind: "command".into(),
+            shell: "cmd".into(),
+            command: "echo 42 & ping -n 30 127.0.0.1 >nul".into(),
+            persistent: true,
+            style: "progress".into(),
+            timeout_ms: 5000,
+            ..Default::default()
+        };
+        let t = Instant::now();
+        let r = test(&c).await;
+        assert!(t.elapsed() < Duration::from_secs(4), "should not wait for the whole command");
+        assert_eq!(r["ok"], true, "{r}");
+        assert_eq!(r["output"]["num"], 42.0);
+        assert_eq!(r["output"]["value"], 0.42);
     }
 
     #[tokio::test]
