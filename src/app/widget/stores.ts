@@ -1,7 +1,8 @@
 import { createSignal } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { AppConfig, MetricsSnapshot, ModuleConfig, ModuleOutput, RunnerConfig } from "../../types";
+import type { AppConfig, DriverConfig, MetricsSnapshot, ModuleConfig, ModuleOutput, RunnerConfig } from "../../types";
+import { DEFAULT_DRIVER, driveTarget } from "./drive";
 
 const HISTORY_LEN = 30;
 const METRIC_HISTORY = 48;
@@ -22,6 +23,7 @@ const [moduleHistory, setModuleHistory] = createSignal<Record<string, number[]>>
 const [modules, setModules] = createSignal<ModuleConfig[]>([]);
 const [runners, setRunners] = createSignal<RunnerConfig[]>([]);
 const [character, setCharacter] = createSignal<string>("bonfire");
+const [driver, setDriver] = createSignal<DriverConfig>(DEFAULT_DRIVER);
 const [metricHistory, setMetricHistory] = createSignal<MetricHistory>({ cpu: [], down: [], up: [], at: 0, stepMs: 1000 });
 
 const pushCapped = (arr: number[], v: number, cap: number) => {
@@ -30,9 +32,19 @@ const pushCapped = (arr: number[], v: number, cap: number) => {
   return next;
 };
 
-// CPU 平滑值：只在收到新快照时更新一次，供动画时钟读取
-let smoothCpu = 0;
-export const getSmoothCpu = () => smoothCpu;
+// 篝火强度（0~1）的平滑：由动画时钟每一帧推进一步。
+// 用时间常数而不是“每次新数据乘一个系数”，这样 1 秒一次的系统指标和 5 秒一次的模块手感一致。
+const DRIVE_TAU_MS = 3000;
+let driveLevel = 0;
+let driveAt = 0;
+export function stepDriveLevel(now: number): number {
+  const target = driveTarget(driver(), metrics(), moduleOutputs());
+  // 第一次调用直接跳到目标值；动画时钟被长时间挂起（窗口隐藏）后也只按有限的时间推进
+  const dt = driveAt ? Math.min(now - driveAt, 10_000) : Infinity;
+  driveAt = now;
+  driveLevel += (target - driveLevel) * (1 - Math.exp(-dt / DRIVE_TAU_MS));
+  return driveLevel;
+}
 
 let started = false;
 export function initStores() {
@@ -43,11 +55,11 @@ export function initStores() {
     setModules(c.modules ?? []);
     setRunners(c.runners ?? []);
     if (c.character) setCharacter(c.character);
+    setDriver(c.driver ?? DEFAULT_DRIVER);
   });
 
   listen<MetricsSnapshot>("metrics://snapshot", (e) => {
     const snap = e.payload;
-    smoothCpu = smoothCpu * 0.7 + snap.cpu_percent * 0.3;
     setMetrics(snap);
     const now = performance.now();
     setMetricHistory((h) => {
@@ -90,9 +102,11 @@ export function initStores() {
   listen<RunnerConfig[]>("config://runners", (e) => setRunners(e.payload ?? []));
 
   listen<string>("character://changed", (e) => setCharacter(e.payload));
+
+  listen<DriverConfig>("config://driver", (e) => setDriver(e.payload ?? DEFAULT_DRIVER));
 }
 
-export { metrics, metricHistory, moduleOutputs, moduleHistory, modules, character, runners };
+export { metrics, metricHistory, moduleOutputs, moduleHistory, modules, character, runners, driver };
 
 export function fmtRate(bps: number): string {
   if (bps < 1024) return `${bps} B/s`;

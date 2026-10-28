@@ -1,7 +1,7 @@
 import { createSignal, onCleanup } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { character, runners, initStores, getSmoothCpu } from "./stores";
+import { character, runners, initStores, stepDriveLevel } from "./stores";
 import "./panel.css";
 
 /** 悬浮图标窗口：固定 64×64、位置只由拖动改变；监控面板在独立的 panel 窗口里（见 PanelWindow.tsx） */
@@ -60,7 +60,8 @@ export function Widget() {
 }
 
 /**
- * 动画时钟：独立于指标推送频率运行，每一帧根据当前平滑 CPU 决定下一帧间隔。
+ * 动画时钟：独立于指标推送频率运行，每一帧根据当前的篝火强度决定下一帧间隔。
+ * 强度由“通用 → 篝火动画”里选的指标驱动（默认 CPU），见 stores.ts 的 stepDriveLevel。
  * （旧实现每收到一次指标就重建 setInterval，间隔长于推送周期时动画会完全冻结）
  */
 function useFrameClock(frames: () => number) {
@@ -69,8 +70,8 @@ function useFrameClock(frames: () => number) {
   const tick = () => {
     const hidden = document.hidden;
     if (!hidden) setFrame((f) => (f + 1) % Math.max(1, frames()));
-    const cpu = Math.min(100, Math.max(0, getSmoothCpu()));
-    const interval = hidden ? 2000 : Math.max(80, 800 - 720 * (cpu / 100));
+    const level = stepDriveLevel(performance.now());
+    const interval = hidden ? 2000 : Math.max(80, 800 - 720 * level);
     timer = window.setTimeout(tick, interval);
   };
   timer = window.setTimeout(tick, 400);

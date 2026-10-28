@@ -238,7 +238,7 @@ export function RunnerSettings() {
                   </For>
                 </div>
                 <div class="help">
-                  选择多张图片（PNG / JPG / SVG / WebP）作为动画帧，按文件名顺序循环播放，速度随 CPU 占用变化；
+                  选择多张图片（PNG / JPG / SVG / WebP）作为动画帧，按文件名顺序循环播放，速度随“通用 → 篝火动画”里选的指标变化（默认 CPU 占用）；
                   也可只选一张 GIF，保留其自带动画。建议使用透明背景的方形图片，最多 {MAX_FRAMES} 帧。
                 </div>
                 <Show when={msg()} keyed><div class="status warn msg-in">{msg()}</div></Show>

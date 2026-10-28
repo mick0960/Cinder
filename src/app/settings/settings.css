@@ -369,3 +369,23 @@ button.link:hover { text-decoration: underline; }
 .imp-target { max-height: 96px; margin: 6px 0 0; padding: 6px 8px; overflow: auto; background: rgba(0, 0, 0, 0.25); border-radius: 6px; color: #cfd2d6; font: 11.5px/1.5 Consolas, monospace; white-space: pre-wrap; word-break: break-all; }
 .imp-line { margin-top: 4px; color: #aaa; font-size: 12px; word-break: break-all; }
 .imp-note { margin-top: 4px; color: #ffb547; font-size: 12px; }
+
+/* 通用设置：篝火动画 */
+.upd-status.warn { color: #ffb547; max-width: 480px; line-height: 1.5; }
+.drive { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 480px; }
+.drive label { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: #ccc; }
+.drive select, .drive input[type="number"] {
+  box-sizing: border-box; height: 30px; padding: 4px 8px; background: var(--bg-2); color: #eee;
+  border: 1px solid #44444b; border-radius: 7px; font: inherit;
+}
+.drive select { min-width: 190px; }
+.drive input[type="number"] { width: 84px; }
+.drive select:focus, .drive input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.22); }
+.drive-now { color: #999; font-size: 12px; }
+.drive-meter { display: flex; align-items: center; gap: 10px; }
+.drive-label { flex: none; color: #999; font-size: 12px; }
+.drive-bar { flex: 1; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.drive-bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #ff9a3c, #ffd36b); transition: width 0.4s var(--ease); }
+.drive-pct { flex: none; width: 40px; color: #ddd; text-align: right; font-variant-numeric: tabular-nums; }
+.drive-help { color: #999; line-height: 1.5; }
+.drive-help:empty { display: none; }

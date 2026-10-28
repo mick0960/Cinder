@@ -2,7 +2,7 @@ use tauri::{AppHandle, Emitter, Manager, State, Window};
 use tauri_plugin_autostart::ManagerExt;
 
 use crate::burn;
-use crate::config::{self, AppState, ModuleConfig, RunnerConfig};
+use crate::config::{self, AppState, DriverConfig, ModuleConfig, RunnerConfig};
 use crate::memclean;
 use crate::menu;
 use crate::metrics;
@@ -107,10 +107,14 @@ pub async fn open_settings(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn save_modules(app: AppHandle, modules: Vec<ModuleConfig>) -> Result<(), String> {
-    config::set_modules(&app, modules.clone());
+    let reset_driver = config::set_modules(&app, modules.clone());
     modules::reload(&app);
     // 通知悬浮窗刷新模块列表，无需重启
     let _ = app.emit_to("widget", "config://modules", &modules);
+    // 驱动篝火的模块被删掉时，驱动已回退到 CPU
+    if let Some(driver) = reset_driver {
+        let _ = app.emit("config://driver", &driver);
+    }
     Ok(())
 }
 
@@ -126,6 +130,16 @@ pub async fn module_click(app: AppHandle, id: String) -> Result<(), String> {
         Some(click) => modules::click::run(&click).await,
         None => Err("该模块没有点击动作".into()),
     }
+}
+
+/// 设置篝火动画的驱动指标，并通知所有窗口
+#[tauri::command]
+pub fn set_driver(app: AppHandle, driver: DriverConfig) -> DriverConfig {
+    let applied = config::set_driver(&app, driver);
+    let _ = app.emit("config://driver", &applied);
+    // 驱动模块需要在面板收起时继续运行：让各模块循环重新判断
+    modules::wake();
+    applied
 }
 
 #[tauri::command]

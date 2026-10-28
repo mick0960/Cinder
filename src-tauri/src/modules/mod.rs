@@ -14,8 +14,9 @@ use std::time::{Duration, Instant};
 use tokio::sync::Notify;
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::config::{AppState, ModuleConfig};
+use crate::config::{self, AppState, ModuleConfig};
 use crate::metrics;
+use crate::widget;
 
 static GEN: AtomicU64 = AtomicU64::new(0);
 static WAKE: OnceLock<Notify> = OnceLock::new();
@@ -30,7 +31,7 @@ fn wake_signal() -> &'static Notify {
     WAKE.get_or_init(Notify::new)
 }
 
-/// 唤醒所有模块循环：面板展开 / 收起时立即重新判断；重载时让旧循环尽快退出
+/// 唤醒所有模块循环：面板展开 / 收起、驱动指标变化时立即重新判断；重载时让旧循环尽快退出
 pub fn wake() {
     wake_signal().notify_waiters();
 }
@@ -49,7 +50,7 @@ pub struct ModuleOutput {
     pub text: String,
     /// 0~1 的比例，供进度条 / 折线使用（折线不截断）
     pub value: Option<f64>,
-    /// 自然单位下的数值（73%→73、23ms→23），供阈值着色使用
+    /// 自然单位下的数值（73%→73、23ms→23），供阈值着色和驱动篝火使用
     pub num: Option<f64>,
     pub color: Option<String>,
     /// JSON 输出可带多行条目（如多个账号的多个用量窗口），组件逐条渲染
@@ -128,7 +129,13 @@ fn spawn_all(app: &AppHandle, gen: u64) {
     }
 }
 
-/// 面板收起时的等待：等展开信号（1s 兜底防止错过通知）
+/// 模块当前是否需要运行：面板展开时所有模块都运行；面板收起时只有驱动篝火的那个模块继续运行，
+/// 而且要篝火看得见才需要（全屏游戏时篝火被自动隐藏，就不必再为它取数）
+fn demanded(app: &AppHandle, id: &str) -> bool {
+    metrics::panel_open() || (config::driver_module(app).as_deref() == Some(id) && widget::is_shown())
+}
+
+/// 不需要运行时的等待：等展开 / 驱动变化的信号（1s 兜底防止错过通知）
 async fn idle_wait() {
     tokio::select! {
         _ = wake_signal().notified() => {}
@@ -150,7 +157,7 @@ async fn run_loop(app: AppHandle, cfg: ModuleConfig, gen: u64) {
         if GEN.load(Ordering::Relaxed) != gen {
             return;
         }
-        if !metrics::panel_open() {
+        if !demanded(&app, &cfg.id) {
             idle_wait().await;
             continue;
         }
@@ -195,7 +202,7 @@ async fn stream_loop(app: AppHandle, cfg: ModuleConfig, gen: u64) {
         if GEN.load(Ordering::Relaxed) != gen {
             return;
         }
-        if !metrics::panel_open() {
+        if !demanded(&app, &cfg.id) {
             idle_wait().await;
             continue;
         }
@@ -237,7 +244,7 @@ async fn stream_once(app: &AppHandle, cfg: &ModuleConfig, gen: u64) -> StreamEnd
             return StreamEnd::Reload;
         }
         let now = Instant::now();
-        let needed = metrics::panel_open();
+        let needed = demanded(app, &cfg.id);
         if needed {
             not_needed_since = None;
         } else if not_needed_since.is_none() {
@@ -484,7 +491,21 @@ mod tests {
         let m: ModuleConfig = serde_json::from_str(old).unwrap();
         assert!(!m.persistent && m.thresholds.is_empty() && m.click.is_none() && m.url.is_empty());
         let cfg: crate::config::AppConfig = serde_json::from_str(r#"{"modules":[{"id":"a"}]}"#).unwrap();
+        assert_eq!(cfg.driver.source, "cpu");
         assert_eq!(cfg.modules[0].kind, "command");
+    }
+
+    #[test]
+    fn driver_config_is_sanitized() {
+        use crate::config::DriverConfig;
+        let d = DriverConfig { source: "bogus".into(), ..Default::default() }.sanitized();
+        assert_eq!(d.source, "cpu");
+        let d = DriverConfig { source: "cpu".into(), module_id: Some("x".into()), ..Default::default() }.sanitized();
+        assert_eq!(d.module_id, None);
+        let d = DriverConfig { source: "module".into(), module_id: Some("x".into()), min: 50.0, max: 10.0 }.sanitized();
+        assert_eq!((d.min, d.max, d.module_id.as_deref()), (0.0, 100.0, Some("x")));
+        let d = DriverConfig { source: "net".into(), max: f64::NAN, ..Default::default() }.sanitized();
+        assert_eq!(d.max, 100.0);
     }
 
     /// 常驻进程：一次启动，连续产出多行；丢弃 LineStream 后进程被结束
