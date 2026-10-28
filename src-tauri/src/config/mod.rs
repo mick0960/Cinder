@@ -45,7 +45,7 @@ pub struct ModuleConfig {
     pub command: String,
     pub shell: String,
     pub interval_ms: u64,
-    /// command：执行超时；http / ping：请求超时
+    /// command 轮询：执行超时；command 常驻：多久没有输出就判定卡死并重启；http / ping：请求超时
     pub timeout_ms: u64,
     pub style: String,
     pub format: String,
@@ -57,6 +57,8 @@ pub struct ModuleConfig {
     pub json_path: String,
     /// ping：主机名或 IPv4 地址
     pub host: String,
+    /// command：只启动一次，每输出一行刷新一次
+    pub persistent: bool,
 }
 
 impl Default for ModuleConfig {
@@ -76,6 +78,7 @@ impl Default for ModuleConfig {
             url: String::new(),
             json_path: String::new(),
             host: String::new(),
+            persistent: false,
         }
     }
 }

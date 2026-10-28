@@ -36,11 +36,16 @@ const TYPE_DEFAULTS: Record<ModuleType, { intervalMs: number; timeoutMs: number 
   ping: { intervalMs: 3000, timeoutMs: 2000 },
   gpu: { intervalMs: 2000, timeoutMs: 5000 },
 };
+/** 常驻进程里“超时”表示多久没有新输出就判定卡死，要比一般的执行超时宽松 */
+export const PERSISTENT_TIMEOUT_MS = 15000;
 /** 随类型自动带上的单位：换类型时只要单位还是默认值就跟着换 */
 const TYPE_UNIT: Partial<Record<ModuleType, string>> = { ping: "ms", gpu: "%" };
 export const defaultUnit = (type: ModuleType): string | null => TYPE_UNIT[type] ?? null;
 
-export const defaultsFor = (m: Pick<ModuleConfig, "type">) => TYPE_DEFAULTS[m.type];
+export const defaultsFor = (m: Pick<ModuleConfig, "type" | "persistent">) => ({
+  intervalMs: TYPE_DEFAULTS[m.type].intervalMs,
+  timeoutMs: m.type === "command" && m.persistent ? PERSISTENT_TIMEOUT_MS : TYPE_DEFAULTS[m.type].timeoutMs,
+});
 
 export function blankModule(type: ModuleType = "command"): ModuleConfig {
   return {
@@ -57,18 +62,25 @@ export function blankModule(type: ModuleType = "command"): ModuleConfig {
     url: "",
     jsonPath: "",
     host: "",
+    persistent: false,
   };
 }
 
 /** 切换模块类型：刷新间隔 / 超时 / 单位还是上一个类型的默认值时，跟着换成新类型的默认值 */
 export function withType(m: ModuleConfig, type: ModuleType): ModuleConfig {
   if (m.type === type) return m;
-  const next: ModuleConfig = { ...m, type };
+  const next: ModuleConfig = { ...m, type, persistent: type === "command" && m.persistent };
   const from = defaultsFor(m);
   const to = defaultsFor(next);
   if (m.intervalMs === from.intervalMs) next.intervalMs = to.intervalMs;
   if (m.timeoutMs === from.timeoutMs) next.timeoutMs = to.timeoutMs;
   if (!m.unit || m.unit === TYPE_UNIT[m.type]) next.unit = TYPE_UNIT[type] ?? null;
+  return next;
+}
+
+export function withPersistent(m: ModuleConfig, persistent: boolean): ModuleConfig {
+  const next = { ...m, persistent };
+  if (m.timeoutMs === defaultsFor(m).timeoutMs) next.timeoutMs = defaultsFor(next).timeoutMs;
   return next;
 }
 

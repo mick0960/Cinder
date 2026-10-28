@@ -1,7 +1,7 @@
 import { For, Show } from "solid-js";
 import type { ModuleConfig, ModuleOutput } from "../../types";
 import { COLOR_OK } from "../components/ModuleStyles";
-import { FORMATS, MODULE_TYPES, PRESET_COLORS, SHELLS, withType } from "./moduleModel";
+import { FORMATS, MODULE_TYPES, PRESET_COLORS, SHELLS, withPersistent, withType } from "./moduleModel";
 import { StylePicker } from "./StylePicker";
 
 export interface TestResult {
@@ -24,7 +24,7 @@ export function ModuleForm(props: {
 
   const typeHint = () => MODULE_TYPES.find((t) => t.id === m().type)?.hint;
   const timeoutLabel = () =>
-    m().type === "command" ? "超时（毫秒）" : "请求超时（毫秒）";
+    m().type === "command" ? (m().persistent ? "无输出超时（毫秒）" : "超时（毫秒）") : "请求超时（毫秒）";
   const minInterval = () => (m().type === "http" ? 1000 : 500);
 
   return (
@@ -75,6 +75,20 @@ export function ModuleForm(props: {
             </select>
           </label>
         </div>
+        <label class="check">
+          <input
+            type="checkbox"
+            checked={m().persistent}
+            onChange={(e) => props.update((x) => withPersistent(x, e.currentTarget.checked))}
+          />
+          <span>
+            常驻进程
+            <small>
+              命令只启动一次，之后每输出一行就刷新一次（如 <code>nvidia-smi -l 2</code>、带循环的脚本）。
+              不用反复启动 shell，面板里的 CPU 曲线也不会被启动开销干扰。
+            </small>
+          </span>
+        </label>
       </Show>
 
       <Show when={m().type === "http"}>
@@ -118,15 +132,17 @@ export function ModuleForm(props: {
       </div>
 
       <div class="grid2">
-        <label>刷新间隔（毫秒）
-          <input
-            type="number"
-            min={minInterval()}
-            step={500}
-            value={m().intervalMs}
-            onChange={(e) => patch({ intervalMs: Math.max(minInterval(), +e.currentTarget.value || minInterval()) })}
-          />
-        </label>
+        <Show when={!(m().type === "command" && m().persistent)}>
+          <label>刷新间隔（毫秒）
+            <input
+              type="number"
+              min={minInterval()}
+              step={500}
+              value={m().intervalMs}
+              onChange={(e) => patch({ intervalMs: Math.max(minInterval(), +e.currentTarget.value || minInterval()) })}
+            />
+          </label>
+        </Show>
         <Show when={m().type !== "gpu"}>
           <label>{timeoutLabel()}
             <input
@@ -142,6 +158,12 @@ export function ModuleForm(props: {
           <input placeholder="如 °C、ms" value={m().unit ?? ""} onInput={(e) => patch({ unit: e.currentTarget.value || null })} />
         </label>
       </div>
+      <Show when={m().type === "command" && m().persistent}>
+        <div class="help">
+          常驻进程按它自己的节奏输出，每行一次更新（输出格式为 JSON 时每行一个 JSON 对象）。
+          “无输出超时”内一行都没有，就认为进程卡死并重启。面板收起 20 秒后进程会被结束，再次展开时重新启动。
+        </div>
+      </Show>
 
       <div class="field">
         <span class="field-label">颜色</span>
@@ -189,7 +211,7 @@ export function ModuleForm(props: {
           <div class="test-result" classList={{ fail: !r.ok }}>
             <div class="meta">
               <span class="result-ico">{r.ok ? "✓" : "✕"}</span>
-              {r.ok ? "成功" : "失败"} · 耗时 {r.ms} ms
+              {r.ok ? "成功" : "失败"} · {m().type === "command" && m().persistent ? "首行输出耗时" : "耗时"} {r.ms} ms
             </div>
             <Show when={r.ok} fallback={<div class="err">{r.error}</div>}>
               <div>文本：{r.output?.text || "—"}</div>

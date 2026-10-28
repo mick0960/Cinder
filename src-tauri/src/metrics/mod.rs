@@ -54,9 +54,8 @@ pub fn set_panel_open(app: &AppHandle, open: bool) {
         if open { panel_ms.max(1000) } else { idle_ms.max(2000) },
         Ordering::Relaxed,
     );
-    if open {
-        crate::modules::wake();
-    }
+    // 展开：模块立即刷新；收起：常驻进程开始计时，到期后结束
+    crate::modules::wake();
 }
 
 pub fn start(app: AppHandle) {

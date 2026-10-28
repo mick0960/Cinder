@@ -61,7 +61,7 @@ export interface ModuleConfig {
   command: string;
   shell: Shell;
   intervalMs: number;
-  /** command：执行超时；http / ping：请求超时 */
+  /** command 轮询：执行超时；command 常驻：多久没有输出就判定卡死并重启；http / ping：请求超时 */
   timeoutMs: number;
   style: "text" | "progress" | "sparkline";
   format: "plain" | "json";
@@ -73,6 +73,8 @@ export interface ModuleConfig {
   jsonPath: string;
   /** ping：主机名或 IPv4 地址 */
   host: string;
+  /** command：只启动一次，每输出一行刷新一次 */
+  persistent: boolean;
 }
 
 export interface RunnerConfig {
