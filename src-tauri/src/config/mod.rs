@@ -38,17 +38,25 @@ impl Default for MetricsConfig {
 #[serde(default, rename_all = "camelCase")]
 pub struct ModuleConfig {
     pub id: String,
+    /// command：运行命令；http：请求网址；ping：ICMP 延迟；gpu：所有显卡的占用率。后三种不经过 shell
     #[serde(rename = "type")]
     pub kind: String,
     pub name: String,
     pub command: String,
     pub shell: String,
     pub interval_ms: u64,
+    /// command：执行超时；http / ping：请求超时
     pub timeout_ms: u64,
     pub style: String,
     pub format: String,
     pub color: Option<String>,
     pub unit: Option<String>,
+    /// http：请求地址
+    pub url: String,
+    /// http：JSON 字段路径（如 data.items[0].value）；留空则把响应正文当作文本
+    pub json_path: String,
+    /// ping：主机名或 IPv4 地址
+    pub host: String,
 }
 
 impl Default for ModuleConfig {
@@ -65,6 +73,9 @@ impl Default for ModuleConfig {
             format: "plain".into(),
             color: None,
             unit: None,
+            url: String::new(),
+            json_path: String::new(),
+            host: String::new(),
         }
     }
 }

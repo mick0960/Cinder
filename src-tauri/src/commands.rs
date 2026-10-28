@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use tauri::{AppHandle, Emitter, Manager, State, Window};
 use tauri_plugin_autostart::ManagerExt;
 
@@ -132,21 +130,7 @@ pub fn set_character(app: AppHandle, character: String) {
 
 #[tauri::command]
 pub async fn test_module(cfg: ModuleConfig) -> Result<serde_json::Value, String> {
-    let t = Instant::now();
-    let res = modules::runner::run_command(&cfg).await;
-    let ms = t.elapsed().as_millis() as u64;
-    Ok(match res {
-        Ok(raw) => serde_json::json!({
-            "ok": true,
-            "ms": ms,
-            "output": modules::parse_output(&cfg, raw),
-        }),
-        Err(e) => serde_json::json!({
-            "ok": false,
-            "ms": ms,
-            "error": e,
-        }),
-    })
+    Ok(modules::test(&cfg).await)
 }
 
 /// 枚举并裁剪几百个进程可能耗时数百毫秒，放到阻塞线程池里，不占主线程

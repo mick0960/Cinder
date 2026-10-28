@@ -27,6 +27,10 @@ sysinfo = "0.33"
 starship-battery = "0.10"
 encoding_rs = "0.8"
 tokio = { version = "1", features = ["process", "time", "sync", "macros"] }
+# HTTP 模块：与 tauri-plugin-updater 使用同一套 reqwest + rustls(ring)，不引入额外依赖；
+# 加密提供者在首次使用时安装（见 modules/http.rs），证书校验走系统证书库，代理走系统代理设置
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "system-proxy"] }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 
 [target.'cfg(windows)'.dependencies]
 # 与 wry 使用同一版本：实现 OLE 拖放目标（IDropTarget）
@@ -44,8 +48,10 @@ windows = { version = "0.62", features = [
 windows-core = "0.62"
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
+    "Win32_NetworkManagement_IpHelper",
     "Win32_Security",
     "Win32_System_Com",
+    "Win32_System_Performance",
     "Win32_System_ProcessStatus",
     "Win32_System_SystemInformation",
     "Win32_System_Threading",
@@ -54,8 +60,8 @@ windows-sys = { version = "0.61", features = [
 ] }
 
 [dev-dependencies]
-# 单元测试里用 #[tokio::test]
-tokio = { version = "1", features = ["rt", "macros"] }
+# 单元测试里起本地 HTTP 服务、用 #[tokio::test]
+tokio = { version = "1", features = ["net", "rt", "macros"] }
 
 [profile.release]
 opt-level = "z"
