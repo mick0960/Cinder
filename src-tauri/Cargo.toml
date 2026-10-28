@@ -53,6 +53,10 @@ windows-sys = { version = "0.61", features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 
+[dev-dependencies]
+# 单元测试里用 #[tokio::test]
+tokio = { version = "1", features = ["rt", "macros"] }
+
 [profile.release]
 opt-level = "z"
 lto = true
