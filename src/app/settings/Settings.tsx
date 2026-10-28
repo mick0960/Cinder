@@ -6,14 +6,18 @@ import { RunnerSettings } from "./RunnerSettings";
 import { GeneralSettings } from "./GeneralSettings";
 import { AboutSettings } from "./AboutSettings";
 import { ModuleForm, type TestResult } from "./ModuleForm";
+import { TemplateDialog } from "./TemplateDialog";
+import { ShareDialog } from "./ShareDialog";
 import { StyleGlyph } from "./StylePicker";
 import { blankModule, moduleProblem, STYLE_LABEL, TYPE_LABEL, targetOf } from "./moduleModel";
+import { fromTemplate, type ModuleTemplate } from "./templates";
 import { COLOR_OK } from "../components/ModuleStyles";
 import "./settings.css";
 
 const DELETE_CONFIRM_MS = 3000;
 
 type Status = { kind: "info" | "ok" | "warn" | "error"; text: string } | null;
+type Dialog = "templates" | "share" | null;
 
 /** 列表里模块名旁边的小标签：非默认的类型 / 常驻进程 */
 const typeTag = (m: ModuleConfig) => (m.type === "command" ? (m.persistent ? "常驻" : null) : TYPE_LABEL[m.type]);
@@ -30,6 +34,7 @@ export function Settings() {
   const [leaving, setLeaving] = createSignal<string | null>(null);
   const [justSaved, setJustSaved] = createSignal(false);
   const [saveShake, setSaveShake] = createSignal(false);
+  const [dialog, setDialog] = createSignal<Dialog>(null);
 
   invoke<AppConfig>("get_config").then((c) => {
     setModules(c.modules ?? []);
@@ -59,6 +64,17 @@ export function Settings() {
   };
 
   const add = () => append([blankModule()], "已新增一个模块，填好后点击“保存并生效”");
+
+  const addFromTemplate = (t: ModuleTemplate) => {
+    const m = fromTemplate(t);
+    setDialog(null);
+    append([m], `已添加「${m.name}」，点击“保存并生效”后出现在面板里`);
+  };
+
+  const importModules = (mods: ModuleConfig[]) => {
+    setDialog(null);
+    append(mods, `已导入 ${mods.length} 个模块，请检查后点击“保存并生效”`);
+  };
 
   // 删除需要二次确认：第一次点击变为“确认删除”，3 秒内再点一次才生效
   let deleteTimer = 0;
@@ -206,6 +222,10 @@ export function Settings() {
             <span>模块 <span class="count">{modules().length}</span></span>
             <button class="add" onClick={add}><span class="plus">＋</span> 新增</button>
           </div>
+          <div class="left-tools">
+            <button onClick={() => setDialog("templates")} title="一键添加常用模块">📚 模板库</button>
+            <button onClick={() => setDialog("share")} title="复制模块配置分享给别人，或导入别人分享的配置">⇄ 导入 / 导出</button>
+          </div>
           <div class="mlist">
             {/* Index：编辑时模块对象会被替换，按位置复用节点，避免整行重建、入场动画重播 */}
             <Index each={modules()}>
@@ -239,6 +259,8 @@ export function Settings() {
               <div class="empty">
                 <div class="empty-ico">📡</div>
                 暂无模块，点击“新增”添加
+                <br />
+                或者 <button class="link" onClick={() => setDialog("templates")}>从模板库一键添加</button>
               </div>
             </Show>
           </div>
@@ -279,6 +301,13 @@ export function Settings() {
           {justSaved() ? "✓ 已保存" : "保存并生效"}
         </button>
       </div>
+
+      <Show when={dialog() === "templates"}>
+        <TemplateDialog onPick={addFromTemplate} onClose={() => setDialog(null)} />
+      </Show>
+      <Show when={dialog() === "share"}>
+        <ShareDialog modules={modules()} selected={editing()} onImport={importModules} onClose={() => setDialog(null)} />
+      </Show>
     </div>
   );
 }
