@@ -48,7 +48,7 @@ pub struct ModuleOutput {
     pub text: String,
     /// 0~1 的比例，供进度条 / 折线使用（折线不截断）
     pub value: Option<f64>,
-    /// 自然单位下的数值（73%→73、23ms→23）
+    /// 自然单位下的数值（73%→73、23ms→23），供阈值着色使用
     pub num: Option<f64>,
     pub color: Option<String>,
     /// JSON 输出可带多行条目（如多个账号的多个用量窗口），组件逐条渲染
@@ -71,6 +71,8 @@ pub struct ModuleItem {
 struct JsonOut {
     text: String,
     value: Option<f64>,
+    /// 可选：自然单位下的数值；不写则按 value × 100 处理
+    num: Option<f64>,
     color: Option<String>,
     items: Option<Vec<ModuleItem>>,
 }
@@ -336,7 +338,7 @@ fn error_output(cfg: &ModuleConfig, text: String) -> ModuleOutput {
     }
 }
 
-/// 组装正常输出：脚本自己给的颜色优先于模块配置的颜色
+/// 组装正常输出：颜色优先级为 脚本自己给的颜色 > 阈值规则 > 模块配置的颜色
 fn build_output(
     cfg: &ModuleConfig,
     text: String,
@@ -345,12 +347,18 @@ fn build_output(
     color: Option<String>,
     items: Option<Vec<ModuleItem>>,
 ) -> ModuleOutput {
-    let color = color.or_else(|| cfg.color.clone());
+    let color = color
+        .or_else(|| num.and_then(|n| value::threshold_color(&cfg.thresholds, n)))
+        .or_else(|| cfg.color.clone());
+    // 多行条目：数值是 0~1 的比例，阈值按百分数比较
     let items = items.map(|items| {
         items
             .into_iter()
             .map(|mut it| {
-                it.color = it.color.or_else(|| cfg.color.clone());
+                it.color = it
+                    .color
+                    .or_else(|| it.value.and_then(|v| value::threshold_color(&cfg.thresholds, v * 100.0)))
+                    .or_else(|| cfg.color.clone());
                 it
             })
             .collect()
@@ -377,7 +385,7 @@ fn parse_output(cfg: &ModuleConfig, raw: String) -> ModuleOutput {
     if cfg.format == "json" {
         return match serde_json::from_str::<JsonOut>(&raw) {
             Ok(v) => {
-                let num = v.value.map(|x| x * 100.0).filter(|n| n.is_finite());
+                let num = v.num.or(v.value.map(|x| x * 100.0)).filter(|n| n.is_finite());
                 build_output(cfg, v.text, v.value, num, v.color, v.items)
             }
             Err(_) => error_output(cfg, "JSON 解析失败".into()),
@@ -395,9 +403,14 @@ fn parse_output(cfg: &ModuleConfig, raw: String) -> ModuleOutput {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Threshold;
 
     fn cfg(style: &str, format: &str) -> ModuleConfig {
         ModuleConfig { id: "m".into(), style: style.into(), format: format.into(), ..Default::default() }
+    }
+
+    fn rule(op: &str, value: f64, color: &str) -> Threshold {
+        Threshold { op: op.into(), value, color: color.into() }
     }
 
     #[test]
@@ -419,6 +432,41 @@ mod tests {
     }
 
     #[test]
+    fn json_output_keeps_script_color_over_thresholds() {
+        let mut c = cfg("progress", "json");
+        c.thresholds = vec![rule("gt", 80.0, "#ff0000")];
+        c.color = Some("#00ff00".into());
+
+        let o = parse_output(&c, r##"{"text":"90%","value":0.9}"##.into());
+        assert_eq!((o.num, o.color.as_deref()), (Some(90.0), Some("#ff0000")));
+
+        let o = parse_output(&c, r##"{"text":"90%","value":0.9,"color":"#123456"}"##.into());
+        assert_eq!(o.color.as_deref(), Some("#123456"));
+
+        let o = parse_output(&c, r##"{"text":"50%","value":0.5}"##.into());
+        assert_eq!(o.color.as_deref(), Some("#00ff00"));
+
+        // 自然单位的 num 优先于 value × 100
+        let o = parse_output(&c, r##"{"text":"235 ms","num":235}"##.into());
+        assert_eq!((o.num, o.color.as_deref()), (Some(235.0), Some("#ff0000")));
+
+        assert_eq!(parse_output(&c, "not json".into()).kind, "error");
+    }
+
+    #[test]
+    fn thresholds_color_multi_line_items() {
+        let mut c = cfg("text", "json");
+        c.thresholds = vec![rule("gt", 80.0, "#ff0000")];
+        let o = parse_output(
+            &c,
+            r##"{"text":"2 项","items":[{"label":"a","text":"90%","value":0.9},{"label":"b","text":"10%","value":0.1},{"label":"c","text":"x","color":"#abcdef","value":0.99}]}"##
+                .into(),
+        );
+        let colors: Vec<_> = o.items.unwrap().into_iter().map(|i| i.color).collect();
+        assert_eq!(colors, vec![Some("#ff0000".into()), None, Some("#abcdef".into())]);
+    }
+
+    #[test]
     fn native_readings_feed_style_ratio() {
         let c = cfg("sparkline", "plain");
         let o = reading_output(&c, Reading { text: "23".into(), num: Some(23.0) });
@@ -433,7 +481,7 @@ mod tests {
         // 0.2.0 及以前保存的模块没有新增的字段
         let old = r#"{"id":"m1","type":"command","name":"x","command":"echo 1","shell":"powershell","intervalMs":5000,"timeoutMs":3000,"style":"text","format":"plain","color":null,"unit":null}"#;
         let m: ModuleConfig = serde_json::from_str(old).unwrap();
-        assert!(!m.persistent && m.url.is_empty());
+        assert!(!m.persistent && m.thresholds.is_empty() && m.url.is_empty());
         let cfg: crate::config::AppConfig = serde_json::from_str(r#"{"modules":[{"id":"a"}]}"#).unwrap();
         assert_eq!(cfg.modules[0].kind, "command");
     }

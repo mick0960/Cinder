@@ -34,7 +34,7 @@ export interface ModuleOutput {
   text: string;
   /** 0~1 的比例，进度条 / 折线用 */
   value: number | null;
-  /** 自然单位下的数值（73%→73、23ms→23） */
+  /** 自然单位下的数值（73%→73、23ms→23），阈值着色用 */
   num: number | null;
   color: string | null;
   /** JSON 输出的多行条目；存在时组件逐条渲染，忽略 style */
@@ -52,6 +52,13 @@ export interface ModuleItem {
 
 export type ModuleType = "command" | "http" | "ping" | "gpu";
 export type Shell = "powershell" | "pwsh" | "cmd" | "direct";
+
+/** 数值阈值着色：数值高于 / 低于 value 时用 color */
+export interface ThresholdRule {
+  op: "gt" | "lt";
+  value: number;
+  color: string;
+}
 
 export interface ModuleConfig {
   id: string;
@@ -75,6 +82,7 @@ export interface ModuleConfig {
   host: string;
   /** command：只启动一次，每输出一行刷新一次 */
   persistent: boolean;
+  thresholds: ThresholdRule[];
 }
 
 export interface RunnerConfig {

@@ -1,4 +1,6 @@
-//! 模块输出里的数值处理：从文本取数。
+//! 模块输出里的数值处理：从文本取数、按阈值规则着色。
+
+use crate::config::Threshold;
 
 /// 整段文本就是一个数：`73`、`73%`、`3/4`（分数换算成百分数）。结果不做截断，保持自然单位。
 pub fn whole_number(text: &str) -> Option<f64> {
@@ -49,7 +51,7 @@ pub fn first_number(text: &str) -> Option<f64> {
     None
 }
 
-/// “自然数值”：整段是数字时精确取值，否则取文本里的第一个数
+/// 阈值着色使用的“自然数值”：整段是数字时精确取值，否则取文本里的第一个数
 pub fn extract_num(text: &str) -> Option<f64> {
     whole_number(text).or_else(|| first_number(text))
 }
@@ -58,9 +60,36 @@ fn finite(v: f64) -> Option<f64> {
     v.is_finite().then_some(v)
 }
 
+/// 返回数值 `n` 命中的阈值规则颜色。
+/// 多条规则同时命中时，同方向的取更“极端”的一条（`>70` 与 `>90` 同时命中按 `>90`），与书写顺序无关；
+/// 方向不同的规则互不比较，先写的优先。
+pub fn threshold_color(rules: &[Threshold], n: f64) -> Option<String> {
+    let mut best: Option<&Threshold> = None;
+    for r in rules {
+        let hit = match r.op.as_str() {
+            "gt" => n > r.value,
+            "lt" => n < r.value,
+            _ => false,
+        };
+        if !hit || r.color.trim().is_empty() {
+            continue;
+        }
+        best = match best {
+            None => Some(r),
+            Some(b) if b.op == r.op && ((r.op == "gt" && r.value > b.value) || (r.op == "lt" && r.value < b.value)) => Some(r),
+            keep => keep,
+        };
+    }
+    best.map(|r| r.color.clone())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn rule(op: &str, value: f64, color: &str) -> Threshold {
+        Threshold { op: op.into(), value, color: color.into() }
+    }
 
     #[test]
     fn whole_numbers() {
@@ -116,5 +145,28 @@ mod tests {
         assert_eq!(extract_num("3/4"), Some(75.0));
         assert_eq!(extract_num("8.8 / 512 GB"), Some(8.8));
         assert_eq!(extract_num("abc"), None);
+    }
+
+    #[test]
+    fn thresholds_pick_the_tightest_rule_of_a_direction() {
+        let rules = [rule("gt", 70.0, "amber"), rule("gt", 90.0, "red")];
+        assert_eq!(threshold_color(&rules, 50.0), None);
+        assert_eq!(threshold_color(&rules, 80.0).as_deref(), Some("amber"));
+        assert_eq!(threshold_color(&rules, 95.0).as_deref(), Some("red"));
+        // 书写顺序不影响结果
+        let reversed = [rule("gt", 90.0, "red"), rule("gt", 70.0, "amber")];
+        assert_eq!(threshold_color(&reversed, 95.0).as_deref(), Some("red"));
+        assert_eq!(threshold_color(&reversed, 80.0).as_deref(), Some("amber"));
+    }
+
+    #[test]
+    fn thresholds_are_strict_and_support_lt() {
+        let rules = [rule("gt", 80.0, "red"), rule("lt", 20.0, "blue"), rule("lt", 10.0, "purple")];
+        assert_eq!(threshold_color(&rules, 80.0), None);
+        assert_eq!(threshold_color(&rules, 80.1).as_deref(), Some("red"));
+        assert_eq!(threshold_color(&rules, 15.0).as_deref(), Some("blue"));
+        assert_eq!(threshold_color(&rules, 5.0).as_deref(), Some("purple"));
+        assert_eq!(threshold_color(&[rule("eq", 1.0, "x")], 1.0), None);
+        assert_eq!(threshold_color(&[rule("gt", 1.0, "  ")], 5.0), None);
     }
 }

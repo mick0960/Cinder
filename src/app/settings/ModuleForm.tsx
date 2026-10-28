@@ -3,6 +3,7 @@ import type { ModuleConfig, ModuleOutput } from "../../types";
 import { COLOR_OK } from "../components/ModuleStyles";
 import { FORMATS, MODULE_TYPES, PRESET_COLORS, SHELLS, withPersistent, withType } from "./moduleModel";
 import { StylePicker } from "./StylePicker";
+import { ThresholdEditor } from "./ThresholdEditor";
 
 export interface TestResult {
   ok: boolean;
@@ -21,6 +22,9 @@ export function ModuleForm(props: {
 }) {
   const m = props.m;
   const patch = (p: Partial<ModuleConfig>) => props.update((x) => ({ ...x, ...p }));
+
+  // 折叠区只按“打开表单时是否已有配置”决定展开；之后增删规则不会让它突然收起
+  const openThresholds = m().thresholds.length > 0;
 
   const typeHint = () => MODULE_TYPES.find((t) => t.id === m().type)?.hint;
   const timeoutLabel = () =>
@@ -198,6 +202,16 @@ export function ModuleForm(props: {
           <span class="hint">{m().color ?? "默认"}</span>
         </div>
       </div>
+
+      <details class="fold" open={openThresholds}>
+        <summary>
+          阈值着色
+          <span class="fold-sum">{m().thresholds.length ? `${m().thresholds.length} 条规则` : "未设置"}</span>
+        </summary>
+        <div class="fold-body">
+          <ThresholdEditor rules={m().thresholds} unit={m().unit} onChange={(thresholds) => patch({ thresholds })} />
+        </div>
+      </details>
 
       <div class="btnrow">
         <button class="test-btn" classList={{ busy: props.testing() }} onClick={props.test} disabled={props.testing()}>
