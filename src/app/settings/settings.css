@@ -277,7 +277,7 @@ button.link:hover { text-decoration: underline; }
 .about-row a { color: #8ab4ff; text-decoration: none; }
 .about-row a:hover { text-decoration: underline; }
 
-/* ---------- settings: 数据来源 / 阈值着色 ---------- */
+/* ---------- settings: 数据来源 / 阈值着色 / 点击动作 ---------- */
 .mtag { flex: none; padding: 0 6px; border-radius: 8px; background: rgba(255, 255, 255, 0.07); color: #aaa; font-size: 10.5px; line-height: 16px; }
 .mitem.active .mtag { background: rgba(76, 194, 255, 0.16); color: #9fdcff; }
 
@@ -292,7 +292,7 @@ button.link:hover { text-decoration: underline; }
 .form label.check small { display: block; color: #999; margin-top: 2px; line-height: 1.5; }
 .help code, .form code, .rule-foot code { font: 11.5px Consolas, monospace; background: rgba(255, 255, 255, 0.07); border-radius: 4px; padding: 0 4px; }
 
-/* 折叠区：阈值着色 */
+/* 折叠区：阈值着色、点击动作 */
 .fold { border: 1px solid #3a3a41; border-radius: 9px; background: rgba(255, 255, 255, 0.02); }
 .fold > summary { display: flex; align-items: center; gap: 6px; padding: 8px 12px; color: #ccc; cursor: pointer; user-select: none; list-style: none; }
 .fold > summary::-webkit-details-marker { display: none; }
@@ -313,4 +313,5 @@ button.link:hover { text-decoration: underline; }
 .rule-del { margin-left: auto; padding: 0 7px; background: none; border: 1px solid transparent; border-radius: 5px; color: #777; cursor: pointer; font: inherit; font-size: 15px; line-height: 22px; }
 .rule-del:hover { color: #f66; background: rgba(255, 102, 102, 0.1); }
 .rule-foot { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.click-editor { display: flex; flex-direction: column; gap: 10px; padding-top: 8px; }
 .color-chip { display: inline-block; width: 11px; height: 11px; margin: 0 2px; border-radius: 3px; vertical-align: -1px; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25); }

@@ -98,6 +98,7 @@ pub fn run() {
             commands::popup_widget_menu,
             commands::open_settings,
             commands::save_modules,
+            commands::module_click,
             commands::save_runners,
             commands::set_character,
             commands::test_module,

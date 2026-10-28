@@ -114,6 +114,20 @@ pub fn save_modules(app: AppHandle, modules: Vec<ModuleConfig>) -> Result<(), St
     Ok(())
 }
 
+/// 点击模块行：按模块 id 取出已保存的点击动作并执行。前端传不了命令内容，只能指定模块。
+#[tauri::command]
+pub async fn module_click(app: AppHandle, id: String) -> Result<(), String> {
+    let click = {
+        let state = app.state::<AppState>();
+        let cfg = state.0.read().unwrap();
+        cfg.modules.iter().find(|m| m.id == id).and_then(|m| m.click.clone())
+    };
+    match click {
+        Some(click) => modules::click::run(&click).await,
+        None => Err("该模块没有点击动作".into()),
+    }
+}
+
 #[tauri::command]
 pub fn save_runners(app: AppHandle, runners: Vec<RunnerConfig>) -> Result<(), String> {
     config::set_runners(&app, runners.clone());
@@ -211,9 +225,5 @@ pub fn set_hide_on_fullscreen(app: AppHandle, enabled: bool) {
 
 #[tauri::command]
 pub fn open_repo() {
-    use std::os::windows::process::CommandExt;
-    let _ = std::process::Command::new("rundll32")
-        .args(["url.dll,FileProtocolHandler", crate::REPO_URL])
-        .creation_flags(0x08000000) // CREATE_NO_WINDOW
-        .spawn();
+    let _ = modules::click::open_url(crate::REPO_URL);
 }
