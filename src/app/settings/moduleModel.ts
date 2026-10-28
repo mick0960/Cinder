@@ -72,6 +72,7 @@ export function blankModule(type: ModuleType = "command"): ModuleConfig {
     host: "",
     persistent: false,
     thresholds: [],
+    click: null,
   };
 }
 
@@ -108,6 +109,8 @@ export function moduleProblem(m: ModuleConfig): string | null {
   if (m.type === "command" && !m.command.trim()) return "命令不能为空";
   if (m.type === "http" && !isHttpUrl(m.url)) return "请填写以 http:// 或 https:// 开头的网址";
   if (m.type === "ping" && !m.host.trim()) return "请填写要 Ping 的主机";
+  if (m.click?.kind === "url" && !isHttpUrl(m.click.target)) return "点击动作的网址需要以 http:// 或 https:// 开头";
+  if (m.click?.kind === "command" && !m.click.target.trim()) return "点击动作的命令不能为空";
   if (m.thresholds.some((r) => !Number.isFinite(r.value))) return "阈值必须是数字";
   return null;
 }

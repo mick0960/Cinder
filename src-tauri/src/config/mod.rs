@@ -53,6 +53,26 @@ impl Default for Threshold {
     }
 }
 
+/// 点击模块行时的动作：打开网址（url）或运行命令（command）
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(default)]
+pub struct ClickAction {
+    pub kind: String,
+    pub target: String,
+    /// 仅 command 使用，含义同模块的 shell
+    pub shell: String,
+}
+
+impl Default for ClickAction {
+    fn default() -> Self {
+        Self {
+            kind: "url".into(),
+            target: String::new(),
+            shell: "powershell".into(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ModuleConfig {
@@ -79,6 +99,7 @@ pub struct ModuleConfig {
     /// command：只启动一次，每输出一行刷新一次
     pub persistent: bool,
     pub thresholds: Vec<Threshold>,
+    pub click: Option<ClickAction>,
 }
 
 impl Default for ModuleConfig {
@@ -100,6 +121,7 @@ impl Default for ModuleConfig {
             host: String::new(),
             persistent: false,
             thresholds: Vec::new(),
+            click: None,
         }
     }
 }

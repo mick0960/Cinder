@@ -60,6 +60,13 @@ export interface ThresholdRule {
   color: string;
 }
 
+/** 点击模块行：打开网址，或运行命令（shell 仅 command 使用） */
+export interface ClickAction {
+  kind: "url" | "command";
+  target: string;
+  shell: Shell;
+}
+
 export interface ModuleConfig {
   id: string;
   /** command：运行命令；http：请求网址取 JSON 字段；ping：ICMP 延迟；gpu：所有显卡的占用率。后三种不经过 shell */
@@ -83,6 +90,7 @@ export interface ModuleConfig {
   /** command：只启动一次，每输出一行刷新一次 */
   persistent: boolean;
   thresholds: ThresholdRule[];
+  click: ClickAction | null;
 }
 
 export interface RunnerConfig {

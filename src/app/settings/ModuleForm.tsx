@@ -1,6 +1,7 @@
 import { For, Show } from "solid-js";
 import type { ModuleConfig, ModuleOutput } from "../../types";
 import { COLOR_OK } from "../components/ModuleStyles";
+import { ClickEditor } from "./ClickEditor";
 import { FORMATS, MODULE_TYPES, PRESET_COLORS, SHELLS, withPersistent, withType } from "./moduleModel";
 import { StylePicker } from "./StylePicker";
 import { ThresholdEditor } from "./ThresholdEditor";
@@ -25,6 +26,7 @@ export function ModuleForm(props: {
 
   // 折叠区只按“打开表单时是否已有配置”决定展开；之后增删规则不会让它突然收起
   const openThresholds = m().thresholds.length > 0;
+  const openClick = m().click != null;
 
   const typeHint = () => MODULE_TYPES.find((t) => t.id === m().type)?.hint;
   const timeoutLabel = () =>
@@ -210,6 +212,16 @@ export function ModuleForm(props: {
         </summary>
         <div class="fold-body">
           <ThresholdEditor rules={m().thresholds} unit={m().unit} onChange={(thresholds) => patch({ thresholds })} />
+        </div>
+      </details>
+
+      <details class="fold" open={openClick}>
+        <summary>
+          点击动作
+          <span class="fold-sum">{m().click ? (m().click!.kind === "url" ? "打开网址" : "运行命令") : "未设置"}</span>
+        </summary>
+        <div class="fold-body">
+          <ClickEditor click={m().click} onChange={(click) => patch({ click })} />
         </div>
       </details>
 

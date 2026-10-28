@@ -154,6 +154,14 @@
 /* 模块名是纯文本：用 block 才能出省略号；名称与数值按长度一起收缩，不再固定占一半 */
 .row.module .label { display: block; flex: 0 1 auto; min-width: 2em; max-width: none; }
 .row.module .value.err { animation: err-shake 0.4s ease-in-out; }
+/* 有点击动作的行：悬停高亮（左右各外扩 4px，负 margin 抵消，不改变布局），点击后闪一下绿色 / 红色 */
+.row.module.clickable { cursor: pointer; margin-left: -4px; margin-right: -4px; padding: 0 4px; border-radius: 5px; transition: background-color 0.15s; }
+.row.module.clickable:hover { background: rgba(255, 255, 255, 0.07); }
+.row.module.clickable:active { background: rgba(255, 255, 255, 0.12); }
+.row.module.click-ok { animation: click-ok 0.7s ease-out; }
+.row.module.click-err { animation: click-err 0.7s ease-out; }
+@keyframes click-ok { 0% { background: rgba(76, 217, 123, 0.4); } 100% { background: transparent; } }
+@keyframes click-err { 0% { background: rgba(255, 93, 93, 0.45); } 100% { background: transparent; } }
 @keyframes err-shake { 25% { transform: translateX(-2px); } 75% { transform: translateX(2px); } }
 .row.module .value.module-sum { color: #8a8a92; }
 .row.module-group { color: #ddd; font-weight: 600; font-size: 11px; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }

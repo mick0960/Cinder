@@ -125,9 +125,47 @@ function Panel(props: { onResize: (el: HTMLElement) => void }) {
   );
 }
 
+const CLICK_FLASH_MS = 700;
+
+/**
+ * 模块行的点击动作（打开网址 / 运行命令）。
+ * 只告诉后端“点了哪个模块”，要执行什么由后端按已保存的配置决定，网页内容无法指定命令。
+ */
+function useModuleClick(mod: () => ModuleConfig) {
+  const [flash, setFlash] = createSignal<"ok" | "err" | null>(null);
+  const [failure, setFailure] = createSignal("");
+  let timer = 0;
+  onCleanup(() => clearTimeout(timer));
+
+  const enabled = () => !!mod().click?.target.trim();
+  const hint = () => {
+    const c = mod().click;
+    if (!c || !enabled()) return undefined;
+    return c.kind === "url" ? `点击打开 ${c.target}` : `点击运行：${c.target}`;
+  };
+  const run = async () => {
+    if (!enabled()) return;
+    try {
+      await invoke("module_click", { id: mod().id });
+      setFailure("");
+      setFlash("ok");
+    } catch (e) {
+      setFailure(String(e));
+      setFlash("err");
+    }
+    clearTimeout(timer);
+    timer = window.setTimeout(() => setFlash(null), CLICK_FLASH_MS);
+  };
+  return { enabled, hint, flash, failure, run };
+}
+
+type ModuleClick = ReturnType<typeof useModuleClick>;
+
 function ModuleRow(props: { mod: ModuleConfig }) {
   const out = () => moduleOutputs()[props.mod.id];
+  const click = useModuleClick(() => props.mod);
   const isErr = () => out()?.kind === "error";
+  const rowTitle = () => [isErr() ? out()!.text : undefined, click.flash() === "err" ? click.failure() : click.hint()].filter(Boolean).join("\n") || undefined;
   const color = () => out()?.color ?? props.mod.color ?? undefined;
   const text = () => {
     const o = out();
@@ -145,8 +183,13 @@ function ModuleRow(props: { mod: ModuleConfig }) {
   const items = () => (isErr() ? undefined : out()?.items) ?? [];
 
   return (
-    <Show when={items().length === 0} fallback={<ModuleItems mod={props.mod} out={out()!} />}>
-      <div class="row module" title={isErr() ? out()!.text : undefined}>
+    <Show when={items().length === 0} fallback={<ModuleItems mod={props.mod} out={out()!} click={click} title={rowTitle()} />}>
+      <div
+        class="row module"
+        classList={{ clickable: click.enabled(), "click-ok": click.flash() === "ok", "click-err": click.flash() === "err" }}
+        title={rowTitle()}
+        onClick={click.run}
+      >
         <span class="label" title={props.mod.name}>{props.mod.name}</span>
         <Switch>
           <Match when={props.mod.style === "progress"}>
@@ -172,11 +215,16 @@ function ModuleRow(props: { mod: ModuleConfig }) {
 }
 
 /** 多行模块：标题行 + 按 group 分组的条目，每条有数值时带进度条 */
-function ModuleItems(props: { mod: ModuleConfig; out: ModuleOutput }) {
+function ModuleItems(props: { mod: ModuleConfig; out: ModuleOutput; click: ModuleClick; title?: string }) {
   const items = () => props.out.items ?? [];
   return (
     <>
-      <div class="row module">
+      <div
+        class="row module"
+        classList={{ clickable: props.click.enabled(), "click-ok": props.click.flash() === "ok", "click-err": props.click.flash() === "err" }}
+        title={props.title}
+        onClick={props.click.run}
+      >
         <span class="label" title={props.mod.name}>{props.mod.name}</span>
         <span class="value module-sum">{props.out.text}</span>
       </div>
