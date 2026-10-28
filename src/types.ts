@@ -18,6 +18,8 @@ export interface MetricsSnapshot {
   net_up_bps: number;
   net_down_bps: number;
   battery: BatteryInfo | null;
+  /** 只在篝火动画选了 GPU 驱动时才采样；否则为 null（刚启用的头几秒也是 null） */
+  gpu_percent: number | null;
   ts: number;
 }
 
@@ -34,7 +36,7 @@ export interface ModuleOutput {
   text: string;
   /** 0~1 的比例，进度条 / 折线用 */
   value: number | null;
-  /** 自然单位下的数值（73%→73、23ms→23），阈值着色用 */
+  /** 自然单位下的数值（73%→73、23ms→23），阈值着色和驱动篝火用 */
   num: number | null;
   color: string | null;
   /** JSON 输出的多行条目；存在时组件逐条渲染，忽略 style */
@@ -93,6 +95,18 @@ export interface ModuleConfig {
   click: ClickAction | null;
 }
 
+export type DriverSource = "cpu" | "mem" | "gpu" | "net_down" | "net_up" | "net" | "module";
+
+/** 篝火动画速度由哪个指标驱动 */
+export interface DriverConfig {
+  source: DriverSource;
+  /** source 为 module 时的模块 id */
+  moduleId: string | null;
+  /** net*：只用 max（MB/s，达到时最快）；module：min~max（模块数值）映射到 0~100%；其余固定按 0~100% */
+  min: number;
+  max: number;
+}
+
 export interface RunnerConfig {
   id: string;
   name: string;
@@ -108,6 +122,7 @@ export interface AppConfig {
   runners: RunnerConfig[];
   update: { auto: boolean; skippedVersion: string | null };
   hideOnFullscreen: boolean;
+  driver: DriverConfig;
 }
 
 export interface UpdateStatus {

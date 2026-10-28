@@ -126,6 +126,50 @@ impl Default for ModuleConfig {
     }
 }
 
+/// 篝火动画速度由哪个指标驱动
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(default, rename_all = "camelCase")]
+pub struct DriverConfig {
+    /// cpu / mem / gpu / net_down / net_up / net / module
+    pub source: String,
+    /// source 为 module 时的模块 id
+    pub module_id: Option<String>,
+    /// 数值范围：net* 只用 max（MB/s，达到时动画最快）；module 用 min~max 映射到 0~100%；其余固定按 0~100%
+    pub min: f64,
+    pub max: f64,
+}
+
+impl Default for DriverConfig {
+    fn default() -> Self {
+        Self {
+            source: "cpu".into(),
+            module_id: None,
+            min: 0.0,
+            max: 100.0,
+        }
+    }
+}
+
+impl DriverConfig {
+    const SOURCES: [&'static str; 7] = ["cpu", "mem", "gpu", "net_down", "net_up", "net", "module"];
+
+    /// 丢弃不合法的取值，保证前端拿到的永远是可用配置
+    pub fn sanitized(mut self) -> Self {
+        if !Self::SOURCES.contains(&self.source.as_str()) {
+            return Self::default();
+        }
+        if self.source != "module" {
+            self.module_id = None;
+        }
+        if !self.min.is_finite() || !self.max.is_finite() || self.max <= self.min {
+            let d = Self::default();
+            self.min = d.min;
+            self.max = d.max;
+        }
+        self
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default, rename_all = "camelCase")]
 pub struct UpdateConfig {
@@ -161,6 +205,8 @@ pub struct AppConfig {
     pub update: UpdateConfig,
     /// 有全屏程序 / 演示模式时自动隐藏图标，结束后恢复（见 fullscreen.rs）
     pub hide_on_fullscreen: bool,
+    /// 篝火动画速度的驱动指标，默认 CPU
+    pub driver: DriverConfig,
 }
 
 impl Default for AppConfig {
@@ -173,6 +219,7 @@ impl Default for AppConfig {
             runners: Vec::new(),
             update: UpdateConfig::default(),
             hide_on_fullscreen: true,
+            driver: DriverConfig::default(),
         }
     }
 }
@@ -207,6 +254,8 @@ pub fn load_or_default(app: &AppHandle) -> AppConfig {
                     if cfg.character == "cat" || cfg.character == "dog" {
                         cfg.character = "bonfire".into();
                     }
+                    // 配置文件可能被手工编辑过
+                    cfg.driver = cfg.driver.clone().sanitized();
                     cfg
                 }
                 Err(_) => {
@@ -238,13 +287,56 @@ pub fn set_window_pos(app: &AppHandle, x: i32, y: i32) {
     DIRTY.store(true, Ordering::Relaxed);
 }
 
-pub fn set_modules(app: &AppHandle, modules: Vec<ModuleConfig>) {
+/// 保存模块列表。若驱动指标指向的模块已被删除，驱动回退到 CPU，并返回回退后的驱动配置供调用方通知前端
+pub fn set_modules(app: &AppHandle, modules: Vec<ModuleConfig>) -> Option<DriverConfig> {
     let state = app.state::<AppState>();
     let mut cfg = state.0.write().unwrap();
     cfg.modules = modules;
+    let orphaned = cfg.driver.source == "module"
+        && !cfg.driver.module_id.as_ref().is_some_and(|id| cfg.modules.iter().any(|m| &m.id == id));
+    if orphaned {
+        cfg.driver = DriverConfig::default();
+    }
+    let reset = orphaned.then(|| cfg.driver.clone());
     let snapshot = cfg.clone();
     drop(cfg);
     save(app, &snapshot);
+    reset
+}
+
+/// 保存驱动指标，返回实际生效的配置（不合法的取值会被修正）
+pub fn set_driver(app: &AppHandle, driver: DriverConfig) -> DriverConfig {
+    let (applied, snapshot) = {
+        let state = app.state::<AppState>();
+        let mut cfg = state.0.write().unwrap();
+        let mut driver = driver.sanitized();
+        if driver.source == "module"
+            && !driver.module_id.as_ref().is_some_and(|id| cfg.modules.iter().any(|m| &m.id == id))
+        {
+            driver = DriverConfig::default();
+        }
+        cfg.driver = driver.clone();
+        (driver, cfg.clone())
+    };
+    save(app, &snapshot);
+    applied
+}
+
+/// 驱动指标当前指向的模块 id（仅 source 为 module 时有值）
+pub fn driver_module(app: &AppHandle) -> Option<String> {
+    let state = app.state::<AppState>();
+    let cfg = state.0.read().unwrap();
+    if cfg.driver.source == "module" {
+        cfg.driver.module_id.clone()
+    } else {
+        None
+    }
+}
+
+pub fn driver_source(app: &AppHandle) -> String {
+    let state = app.state::<AppState>();
+    let source = state.0.read().unwrap().driver.source.clone();
+    source
 }
 
 pub fn set_runners(app: &AppHandle, runners: Vec<RunnerConfig>) {

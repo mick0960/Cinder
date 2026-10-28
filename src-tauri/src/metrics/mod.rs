@@ -36,6 +36,8 @@ pub struct MetricsSnapshot {
     pub net_up_bps: u64,
     pub net_down_bps: u64,
     pub battery: Option<BatteryInfo>,
+    /// GPU 占用率。只在篝火动画选了 GPU 驱动时才采样，其余时候为 None（采样线程刚启动的头几秒也是 None）
+    pub gpu_percent: Option<f32>,
     pub ts: u64,
 }
 
@@ -123,6 +125,13 @@ pub fn start(app: AppHandle) {
                 last_slow = Some(now);
             }
 
+            // 篝火被隐藏（如全屏游戏期间）时不采样，GPU 采样线程会在闲置后自行退出
+            let gpu_percent = if config::driver_source(&app) == "gpu" && crate::widget::is_shown() {
+                crate::gpu::percent().ok().flatten()
+            } else {
+                None
+            };
+
             let snap = MetricsSnapshot {
                 cpu_percent: sys.global_cpu_usage(),
                 mem_used_mb: sys.used_memory() as f64 / MIB,
@@ -131,6 +140,7 @@ pub fn start(app: AppHandle) {
                 net_up_bps: up,
                 net_down_bps: down,
                 battery: cached_battery.clone(),
+                gpu_percent,
                 ts: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .map(|d| d.as_secs())

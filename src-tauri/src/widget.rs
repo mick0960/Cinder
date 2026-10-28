@@ -16,6 +16,15 @@ pub const PANEL_LABEL: &str = "panel";
 /// 用户自己从托盘隐藏的图标，全屏来去都保持隐藏。
 static AUTO_HIDDEN: AtomicBool = AtomicBool::new(false);
 
+/// 图标当前是否显示着。由下面的显示 / 隐藏函数维护，任意线程都能无阻塞地读取
+/// （`is_visible` 要等主线程应答，指标线程、模块循环里不能用它）。
+/// 篝火看不见时不必再为驱动它的模块和 GPU 采样取数——比如全屏游戏期间。
+static SHOWN: AtomicBool = AtomicBool::new(true);
+
+pub fn is_shown() -> bool {
+    SHOWN.load(Ordering::Relaxed)
+}
+
 pub fn is_visible(app: &AppHandle) -> bool {
     app.get_webview_window(WIDGET_LABEL)
         .and_then(|w| w.is_visible().ok())
@@ -65,6 +74,8 @@ fn hide_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window(WIDGET_LABEL) {
         let _ = w.hide();
     }
+    SHOWN.store(false, Ordering::Relaxed);
+    crate::modules::wake();
 }
 
 fn raise(app: &AppHandle) {
@@ -78,6 +89,8 @@ fn raise(app: &AppHandle) {
         return;
     };
     let _ = win.show();
+    SHOWN.store(true, Ordering::Relaxed);
+    crate::modules::wake();
     // 取消置顶后图标和普通窗口同层，show() 不会改变 z 序，得显式提到最上面
     let Ok(hwnd) = win.hwnd() else {
         return;

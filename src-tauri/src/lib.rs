@@ -99,6 +99,7 @@ pub fn run() {
             commands::open_settings,
             commands::save_modules,
             commands::module_click,
+            commands::set_driver,
             commands::save_runners,
             commands::set_character,
             commands::test_module,

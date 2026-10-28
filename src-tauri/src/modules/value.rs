@@ -51,7 +51,7 @@ pub fn first_number(text: &str) -> Option<f64> {
     None
 }
 
-/// 阈值着色使用的“自然数值”：整段是数字时精确取值，否则取文本里的第一个数
+/// 阈值着色、动画驱动使用的“自然数值”：整段是数字时精确取值，否则取文本里的第一个数
 pub fn extract_num(text: &str) -> Option<f64> {
     whole_number(text).or_else(|| first_number(text))
 }
