@@ -1,11 +1,14 @@
 mod burn;
 mod commands;
 mod config;
+mod fullscreen;
 mod memclean;
 mod menu;
 mod metrics;
 mod modules;
+mod tray;
 mod updater;
+mod widget;
 
 use tauri::{Emitter, Manager};
 
@@ -13,13 +16,12 @@ pub const REPO_URL: &str = "https://github.com/mick0960/Cinder";
 
 pub fn run() {
     tauri::Builder::default()
-        // 单实例插件必须最先注册；重复启动时只把已有的悬浮窗带到前台
+        // 单实例插件必须最先注册；重复启动 = 想找回篝火，把已有的悬浮窗显示出来并拉到最上面
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(win) = app.get_webview_window("widget") {
-                let _ = win.show();
-            }
+            widget::show(app);
         }))
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_autostart::Builder::new().build())
         .setup(|app| {
             let cfg = config::load_or_default(app.handle());
             app.manage(config::AppState(std::sync::RwLock::new(cfg)));
@@ -43,16 +45,22 @@ pub fn run() {
                 }
             }
 
+            // 托盘要先于指标线程建好：指标线程每个周期都会刷新它的悬停提示
+            let _ = tray::init(app.handle());
             metrics::start(app.handle().clone());
+            fullscreen::start(app.handle().clone());
             modules::start(app.handle().clone());
             app.manage(updater::UpdateState::default());
             updater::start(app.handle().clone());
 
+            // 全局菜单事件：右键菜单和托盘菜单共用 settings / exit
             app.on_menu_event(|app, event| match event.id().as_ref() {
                 "exit" => app.exit(0),
                 "settings" => {
                     let _ = menu::open_settings(app);
                 }
+                "show_widget" => widget::show(app),
+                "hide_widget" => widget::hide(app),
                 "toggle_top" => {
                     if let Some(w) = app.get_webview_window("widget") {
                         let cur = w.is_always_on_top().unwrap_or(true);
@@ -98,6 +106,9 @@ pub fn run() {
             commands::install_update,
             commands::dismiss_update,
             commands::set_update_auto,
+            commands::get_autostart,
+            commands::set_autostart,
+            commands::set_hide_on_fullscreen,
             commands::open_repo,
             commands::clean_memory,
             commands::burn_catch,

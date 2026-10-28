@@ -137,6 +137,7 @@ pub fn start(app: AppHandle) {
                     .map(|d| d.as_secs())
                     .unwrap_or(0),
             };
+            crate::tray::update_tooltip(&app, &snap);
             let _ = app.emit_to("widget", "metrics://snapshot", &snap);
 
             config::save_if_dirty(&app);

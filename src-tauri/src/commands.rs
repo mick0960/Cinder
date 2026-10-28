@@ -1,6 +1,7 @@
 use std::time::Instant;
 
 use tauri::{AppHandle, Emitter, Manager, State, Window};
+use tauri_plugin_autostart::ManagerExt;
 
 use crate::burn;
 use crate::config::{self, AppState, ModuleConfig, RunnerConfig};
@@ -9,6 +10,7 @@ use crate::menu;
 use crate::metrics;
 use crate::modules;
 use crate::updater::{self, UpdateStatus};
+use crate::widget::{self, PANEL_LABEL};
 
 #[tauri::command]
 pub fn get_config(state: State<AppState>) -> config::AppConfig {
@@ -43,22 +45,16 @@ pub fn set_widget_rect(window: Window, x: i32, y: i32, w: i32, h: i32) -> Result
     }
 }
 
-const PANEL_LABEL: &str = "panel";
-
 /// 监控面板是独立窗口：悬浮图标窗口永远不改变大小和位置，点击时图标不会闪动或偏移。
 ///
 /// 必须是 async：同步命令跑在主线程上，Windows 下在其中创建窗口会死锁（整个应用无响应）。
 #[tauri::command]
 pub async fn toggle_panel(app: AppHandle) -> Result<(), String> {
-    let open = !metrics::panel_open();
-    metrics::set_panel_open(&app, open);
-    if !open {
-        let _ = app.emit_to(PANEL_LABEL, "panel://hide", ());
-        if let Some(w) = app.get_webview_window(PANEL_LABEL) {
-            let _ = w.hide();
-        }
+    if metrics::panel_open() {
+        widget::close_panel(&app);
         return Ok(());
     }
+    metrics::set_panel_open(&app, true);
     if app.get_webview_window(PANEL_LABEL).is_some() {
         let _ = app.emit_to(PANEL_LABEL, "panel://show", ());
         return Ok(());
@@ -200,6 +196,33 @@ pub fn dismiss_update(app: AppHandle) {
 #[tauri::command]
 pub fn set_update_auto(app: AppHandle, auto: bool) {
     config::set_update(&app, |u| u.auto = auto);
+}
+
+/// 开机自启以系统里的实际状态为准：用户可能在任务管理器的“启动应用”里把它关掉了
+#[tauri::command]
+pub fn get_autostart(app: AppHandle) -> Result<bool, String> {
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_autostart(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let launch = app.autolaunch();
+    let result = if enabled { launch.enable() } else { launch.disable() };
+    result.map_err(|e| e.to_string())?;
+    // 写完回读一次：启动项还留在别处（比如以管理员身份写进 HKLM 的）时，不能谎称已经关闭
+    if launch.is_enabled().map_err(|e| e.to_string())? != enabled {
+        return Err(if enabled {
+            "未能开启开机自启".into()
+        } else {
+            "未能关闭：启动项由管理员权限创建，请以管理员身份运行 Cinder 后再关闭".into()
+        });
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_hide_on_fullscreen(app: AppHandle, enabled: bool) {
+    config::set_hide_on_fullscreen(&app, enabled);
 }
 
 #[tauri::command]
