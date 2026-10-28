@@ -1,95 +1,22 @@
-import { createEffect, createMemo, createSignal, For, Index, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, Index, onCleanup, onMount, Show } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AppConfig, ModuleConfig } from "../../types";
 import { RunnerSettings } from "./RunnerSettings";
 import { GeneralSettings } from "./GeneralSettings";
 import { AboutSettings } from "./AboutSettings";
+import { ModuleForm, type TestResult } from "./ModuleForm";
+import { StyleGlyph } from "./StylePicker";
+import { blankModule, moduleProblem, STYLE_LABEL, TYPE_LABEL, targetOf } from "./moduleModel";
 import { COLOR_OK } from "../components/ModuleStyles";
 import "./settings.css";
 
-let nextId = Date.now();
-const newModule = (): ModuleConfig => ({
-  id: "m" + nextId++,
-  type: "command",
-  name: "新模块",
-  command: "Write-Output 'hello'",
-  shell: "powershell",
-  intervalMs: 5000,
-  timeoutMs: 3000,
-  style: "text",
-  format: "plain",
-  color: null,
-  unit: null,
-});
-
-const SHELLS: [ModuleConfig["shell"], string][] = [
-  ["powershell", "Windows PowerShell"],
-  ["pwsh", "PowerShell 7 (pwsh)"],
-  ["cmd", "命令提示符 (cmd)"],
-  ["direct", "直接运行程序"],
-];
-const STYLES: [ModuleConfig["style"], string][] = [
-  ["text", "文本"],
-  ["progress", "进度条"],
-  ["sparkline", "趋势折线"],
-];
-const FORMATS: [ModuleConfig["format"], string][] = [
-  ["plain", "纯文本"],
-  ["json", "JSON（text / value / color）"],
-];
-const STYLE_LABEL = Object.fromEntries(STYLES) as Record<string, string>;
-const PRESET_COLORS = ["#4cc2ff", "#4cd97b", "#ffb547", "#ff5d5d", "#c58cff", "#ff7ac6", "#5eead4"];
 const DELETE_CONFIRM_MS = 3000;
 
 type Status = { kind: "info" | "ok" | "warn" | "error"; text: string } | null;
 
-/** 列表里的样式小图标 */
-export function StyleGlyph(props: { style: ModuleConfig["style"] }) {
-  return (
-    <svg class="glyph" viewBox="0 0 16 16" width="14" height="14">
-      <Show when={props.style === "text"}>
-        <path d="M3 4h10M8 4v9" />
-      </Show>
-      <Show when={props.style === "progress"}>
-        <rect x="1.5" y="6" width="13" height="4" rx="2" />
-        <path class="solid" d="M3.5 8h5" />
-      </Show>
-      <Show when={props.style === "sparkline"}>
-        <path d="M1.5 12l3.5-4 3 2.5 5.5-7" />
-      </Show>
-    </svg>
-  );
-}
-
-/** 可视化的样式选择：每个选项带一个会动的小预览 */
-function StylePicker(props: { value: ModuleConfig["style"]; color: string; onChange: (v: ModuleConfig["style"]) => void }) {
-  return (
-    <div class="style-picker" role="radiogroup" style={{ "--c": props.color }}>
-      <For each={STYLES}>
-        {([v, t]) => (
-          <button
-            type="button"
-            role="radio"
-            aria-checked={props.value === v}
-            class="style-card"
-            classList={{ active: props.value === v }}
-            onClick={() => props.onChange(v)}
-          >
-            <span class={`pv pv-${v}`}>
-              <Show when={v === "text"}><span class="pv-text">42<small>°C</small></span></Show>
-              <Show when={v === "progress"}><span class="pv-bar"><i /></span></Show>
-              <Show when={v === "sparkline"}>
-                <svg viewBox="0 0 60 18" width="60" height="18"><polyline points="0,14 10,10 18,12 28,5 36,8 46,3 60,7" /></svg>
-              </Show>
-            </span>
-            <span class="pv-label">{t}</span>
-          </button>
-        )}
-      </For>
-    </div>
-  );
-}
+/** 列表里模块名旁边的小标签：非默认的类型 */
+const typeTag = (m: ModuleConfig) => (m.type === "command" ? null : TYPE_LABEL[m.type]);
 
 export function Settings() {
   const [tab, setTab] = createSignal<"modules" | "runners" | "general" | "about">("modules");
@@ -97,7 +24,7 @@ export function Settings() {
   const [saved, setSaved] = createSignal("[]");
   const [selected, setSelected] = createSignal<string | null>(null);
   const [status, setStatus] = createSignal<Status>(null);
-  const [testResult, setTestResult] = createSignal<any>(null);
+  const [testResult, setTestResult] = createSignal<TestResult | null>(null);
   const [testing, setTesting] = createSignal(false);
   const [pendingDelete, setPendingDelete] = createSignal<string | null>(null);
   const [leaving, setLeaving] = createSignal<string | null>(null);
@@ -113,9 +40,9 @@ export function Settings() {
   const dirty = createMemo(() => JSON.stringify(modules()) !== saved());
   const editing = () => modules().find((m) => m.id === selected()) ?? null;
 
-  const patch = (p: Partial<ModuleConfig>) => {
+  const update = (fn: (m: ModuleConfig) => ModuleConfig) => {
     setStatus(null);
-    setModules((ms) => ms.map((m) => (m.id === selected() ? { ...m, ...p } : m)));
+    setModules((ms) => ms.map((m) => (m.id === selected() ? fn(m) : m)));
   };
 
   const select = (id: string) => {
@@ -123,12 +50,15 @@ export function Settings() {
     setTestResult(null);
   };
 
-  const add = () => {
-    const m = newModule();
-    setStatus(null);
-    setModules((ms) => [...ms, m]);
-    select(m.id);
+  /** 把新模块追加到列表末尾、选中它，并滚动到可见位置 */
+  const append = (added: ModuleConfig[], message: string) => {
+    setModules((ms) => [...ms, ...added]);
+    select(added[0].id);
+    setStatus({ kind: "info", text: message });
+    requestAnimationFrame(() => document.querySelector(".mitem.active")?.scrollIntoView({ block: "nearest" }));
   };
+
+  const add = () => append([blankModule()], "已新增一个模块，填好后点击“保存并生效”");
 
   // 删除需要二次确认：第一次点击变为“确认删除”，3 秒内再点一次才生效
   let deleteTimer = 0;
@@ -161,7 +91,7 @@ export function Settings() {
     setTesting(true);
     setTestResult(null);
     try {
-      setTestResult(await invoke("test_module", { cfg: m }));
+      setTestResult(await invoke<TestResult>("test_module", { cfg: m }));
     } catch (e) {
       setStatus({ kind: "error", text: String(e) });
     } finally {
@@ -175,12 +105,14 @@ export function Settings() {
     requestAnimationFrame(() => setSaveShake(true));
   };
   const save = async () => {
-    const empty = modules().find((m) => !m.name.trim() || !m.command.trim());
-    if (empty) {
-      select(empty.id);
-      setStatus({ kind: "warn", text: "名称和命令不能为空" });
-      flashSaveError();
-      return;
+    for (const m of modules()) {
+      const problem = moduleProblem(m);
+      if (problem) {
+        select(m.id);
+        setStatus({ kind: "warn", text: problem });
+        flashSaveError();
+        return;
+      }
     }
     setStatus({ kind: "info", text: "保存中…" });
     try {
@@ -281,10 +213,12 @@ export function Settings() {
                 <div
                   class="mitem"
                   classList={{ active: m().id === selected(), leaving: leaving() === m().id }}
+                  title={targetOf(m())}
                   onClick={() => select(m().id)}
                 >
                   <span class="mdot" style={{ background: m().color ?? COLOR_OK }} />
                   <span class="mname">{m().name || "（未命名）"}</span>
+                  <Show when={typeTag(m())}>{(tag) => <span class="mtag">{tag()}</span>}</Show>
                   <span class="mstyle" title={STYLE_LABEL[m().style] ?? m().style}><StyleGlyph style={m().style} /></span>
                   <button
                     class="del"
@@ -323,113 +257,7 @@ export function Settings() {
             {(m) => (
               // 按模块 id 重新挂载：切换模块时表单逐项浮现，编辑时不重建
               <Show when={m().id} keyed>
-                <div class="form">
-                  <label>名称
-                    <input value={m().name} onInput={(e) => patch({ name: e.currentTarget.value })} />
-                  </label>
-                  <label>命令
-                    <textarea
-                      rows={4}
-                      spellcheck={false}
-                      value={m().command}
-                      onInput={(e) => patch({ command: e.currentTarget.value })}
-                    />
-                  </label>
-                  <div class="field">
-                    <span class="field-label">展示样式</span>
-                    <StylePicker value={m().style} color={m().color ?? COLOR_OK} onChange={(style) => patch({ style })} />
-                  </div>
-                  <div class="grid2">
-                    <label>Shell
-                      <select value={m().shell} onChange={(e) => patch({ shell: e.currentTarget.value as ModuleConfig["shell"] })}>
-                        <For each={SHELLS}>{([v, t]) => <option value={v}>{t}</option>}</For>
-                      </select>
-                    </label>
-                    <label>输出格式
-                      <select value={m().format} onChange={(e) => patch({ format: e.currentTarget.value as ModuleConfig["format"] })}>
-                        <For each={FORMATS}>{([v, t]) => <option value={v}>{t}</option>}</For>
-                      </select>
-                    </label>
-                    <label>刷新间隔（毫秒）
-                      <input type="number" min={500} step={500} value={m().intervalMs}
-                        onChange={(e) => patch({ intervalMs: Math.max(500, +e.currentTarget.value || 500) })} />
-                    </label>
-                    <label>超时（毫秒）
-                      <input type="number" min={500} step={500} value={m().timeoutMs}
-                        onChange={(e) => patch({ timeoutMs: Math.max(500, +e.currentTarget.value || 500) })} />
-                    </label>
-                    <label>单位（可选）
-                      <input placeholder="如 °C、ms" value={m().unit ?? ""}
-                        onInput={(e) => patch({ unit: e.currentTarget.value || null })} />
-                    </label>
-                  </div>
-                  <div class="field">
-                    <span class="field-label">颜色</span>
-                    <div class="color-row">
-                      <button
-                        type="button"
-                        class="swatch auto"
-                        classList={{ active: !m().color }}
-                        title="默认"
-                        onClick={() => patch({ color: null })}
-                      >A</button>
-                      <For each={PRESET_COLORS}>
-                        {(c) => (
-                          <button
-                            type="button"
-                            class="swatch"
-                            classList={{ active: m().color?.toLowerCase() === c }}
-                            style={{ "--sw": c }}
-                            title={c}
-                            onClick={() => patch({ color: c })}
-                          />
-                        )}
-                      </For>
-                      <label
-                        class="swatch custom"
-                        classList={{ active: !!m().color && !PRESET_COLORS.includes(m().color!.toLowerCase()) }}
-                        title="自定义颜色"
-                        style={{ "--sw": m().color ?? COLOR_OK }}
-                      >
-                        <input type="color" value={m().color ?? COLOR_OK}
-                          onInput={(e) => patch({ color: e.currentTarget.value })} />
-                      </label>
-                      <span class="hint">{m().color ?? "默认"}</span>
-                    </div>
-                  </div>
-                  <div class="btnrow">
-                    <button class="test-btn" classList={{ busy: testing() }} onClick={test} disabled={testing()}>
-                      <span class="spinner" />
-                      <span class="play">▶</span>
-                      {testing() ? "运行中…" : "测试运行"}
-                    </button>
-                  </div>
-                  <Show when={testResult()} keyed>
-                    {(r) => (
-                      <div class="test-result" classList={{ fail: !r.ok }}>
-                        <div class="meta">
-                          <span class="result-ico">{r.ok ? "✓" : "✕"}</span>
-                          {r.ok ? "成功" : "失败"} · 耗时 {r.ms} ms
-                        </div>
-                        <Show when={r.ok} fallback={<div class="err">{r.error}</div>}>
-                          <div>文本：{r.output?.text || "—"}</div>
-                          <div>数值：{r.output?.value ?? "—"}</div>
-                          <Show when={r.output?.items?.length}>
-                            <div>条目：{r.output.items.length}</div>
-                            <For each={r.output.items}>
-                              {(it: any) => (
-                                <div class="item">
-                                  {it.group ? `${it.group} / ` : ""}{it.label}：{it.text || "—"}
-                                  {it.value != null ? ` (${it.value})` : ""}
-                                </div>
-                              )}
-                            </For>
-                          </Show>
-                        </Show>
-                      </div>
-                    )}
-                  </Show>
-                </div>
+                <ModuleForm m={m} update={update} test={test} testing={testing} result={testResult} />
               </Show>
             )}
           </Show>

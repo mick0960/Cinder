@@ -32,7 +32,10 @@ export interface ModuleOutput {
   id: string;
   kind: "ok" | "error";
   text: string;
+  /** 0~1 的比例，进度条 / 折线用 */
   value: number | null;
+  /** 自然单位下的数值（73%→73、23ms→23） */
+  num: number | null;
   color: string | null;
   /** JSON 输出的多行条目；存在时组件逐条渲染，忽略 style */
   items?: ModuleItem[] | null;
@@ -47,18 +50,29 @@ export interface ModuleItem {
   color: string | null;
 }
 
+export type ModuleType = "command" | "http" | "ping" | "gpu";
+export type Shell = "powershell" | "pwsh" | "cmd" | "direct";
+
 export interface ModuleConfig {
   id: string;
-  type: "command";
+  /** command：运行命令；http：请求网址取 JSON 字段；ping：ICMP 延迟；gpu：所有显卡的占用率。后三种不经过 shell */
+  type: ModuleType;
   name: string;
   command: string;
-  shell: "powershell" | "pwsh" | "cmd" | "direct";
+  shell: Shell;
   intervalMs: number;
+  /** command：执行超时；http / ping：请求超时 */
   timeoutMs: number;
   style: "text" | "progress" | "sparkline";
   format: "plain" | "json";
   color: string | null;
   unit: string | null;
+  /** http：请求地址 */
+  url: string;
+  /** http：JSON 字段路径（如 data.items[0].value）；留空则把响应正文当作文本 */
+  jsonPath: string;
+  /** ping：主机名或 IPv4 地址 */
+  host: string;
 }
 
 export interface RunnerConfig {

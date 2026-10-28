@@ -2,6 +2,7 @@ mod burn;
 mod commands;
 mod config;
 mod fullscreen;
+mod gpu;
 mod memclean;
 mod menu;
 mod metrics;
