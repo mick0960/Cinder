@@ -1,4 +1,4 @@
-import type { ModuleConfig, ModuleType, Shell } from "../../types";
+import type { ModuleConfig, ModuleType, Shell, ThresholdRule } from "../../types";
 
 let nextId = Date.now();
 export const newId = () => "m" + nextId++;
@@ -28,6 +28,14 @@ export const FORMATS: [ModuleConfig["format"], string][] = [
 ];
 export const STYLE_LABEL = Object.fromEntries(STYLES) as Record<string, string>;
 export const PRESET_COLORS = ["#4cc2ff", "#4cd97b", "#ffb547", "#ff5d5d", "#c58cff", "#ff7ac6", "#5eead4"];
+
+/** 阈值规则可选的颜色：与面板内置指标的警告色一致 */
+export const RULE_COLORS: [string, string][] = [
+  ["#ff5d5d", "红"],
+  ["#ffb547", "橙"],
+  ["#4cd97b", "绿"],
+  ["#4cc2ff", "蓝"],
+];
 
 /** 各类型的默认刷新间隔 / 超时（毫秒） */
 const TYPE_DEFAULTS: Record<ModuleType, { intervalMs: number; timeoutMs: number }> = {
@@ -63,6 +71,7 @@ export function blankModule(type: ModuleType = "command"): ModuleConfig {
     jsonPath: "",
     host: "",
     persistent: false,
+    thresholds: [],
   };
 }
 
@@ -99,7 +108,18 @@ export function moduleProblem(m: ModuleConfig): string | null {
   if (m.type === "command" && !m.command.trim()) return "命令不能为空";
   if (m.type === "http" && !isHttpUrl(m.url)) return "请填写以 http:// 或 https:// 开头的网址";
   if (m.type === "ping" && !m.host.trim()) return "请填写要 Ping 的主机";
+  if (m.thresholds.some((r) => !Number.isFinite(r.value))) return "阈值必须是数字";
   return null;
+}
+
+/** 新增阈值规则时的默认值：第一条“高于 80 变红”，之后依次补橙色预警和低值预警 */
+export function nextRule(existing: ThresholdRule[]): ThresholdRule {
+  if (!existing.some((r) => r.op === "gt")) return { op: "gt", value: 80, color: "#ff5d5d" };
+  if (existing.length === 1) {
+    const top = existing[0].value;
+    return { op: "gt", value: Math.round(top * 0.75), color: "#ffb547" };
+  }
+  return { op: "lt", value: 20, color: "#4cc2ff" };
 }
 
 /** 一行说明：列表悬停提示、导入预览里用来看模块到底会做什么 */

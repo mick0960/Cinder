@@ -34,6 +34,25 @@ impl Default for MetricsConfig {
     }
 }
 
+/// 数值阈值着色规则：数值 `op`（gt 高于 / lt 低于）`value` 时使用 `color`
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(default)]
+pub struct Threshold {
+    pub op: String,
+    pub value: f64,
+    pub color: String,
+}
+
+impl Default for Threshold {
+    fn default() -> Self {
+        Self {
+            op: "gt".into(),
+            value: 80.0,
+            color: "#ff5d5d".into(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ModuleConfig {
@@ -59,6 +78,7 @@ pub struct ModuleConfig {
     pub host: String,
     /// command：只启动一次，每输出一行刷新一次
     pub persistent: bool,
+    pub thresholds: Vec<Threshold>,
 }
 
 impl Default for ModuleConfig {
@@ -79,6 +99,7 @@ impl Default for ModuleConfig {
             json_path: String::new(),
             host: String::new(),
             persistent: false,
+            thresholds: Vec::new(),
         }
     }
 }
