@@ -102,6 +102,8 @@ pub struct AppConfig {
     pub modules: Vec<ModuleConfig>,
     pub runners: Vec<RunnerConfig>,
     pub update: UpdateConfig,
+    /// 有全屏程序 / 演示模式时自动隐藏图标，结束后恢复（见 fullscreen.rs）
+    pub hide_on_fullscreen: bool,
 }
 
 impl Default for AppConfig {
@@ -113,6 +115,7 @@ impl Default for AppConfig {
             modules: Vec::new(),
             runners: Vec::new(),
             update: UpdateConfig::default(),
+            hide_on_fullscreen: true,
         }
     }
 }
@@ -221,6 +224,16 @@ pub fn set_update(app: &AppHandle, f: impl FnOnce(&mut UpdateConfig)) {
         let state = app.state::<AppState>();
         let mut cfg = state.0.write().unwrap();
         f(&mut cfg.update);
+        cfg.clone()
+    };
+    save(app, &snapshot);
+}
+
+pub fn set_hide_on_fullscreen(app: &AppHandle, enabled: bool) {
+    let snapshot = {
+        let state = app.state::<AppState>();
+        let mut cfg = state.0.write().unwrap();
+        cfg.hide_on_fullscreen = enabled;
         cfg.clone()
     };
     save(app, &snapshot);

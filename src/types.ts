@@ -75,6 +75,7 @@ export interface AppConfig {
   modules: ModuleConfig[];
   runners: RunnerConfig[];
   update: { auto: boolean; skippedVersion: string | null };
+  hideOnFullscreen: boolean;
 }
 
 export interface UpdateStatus {
