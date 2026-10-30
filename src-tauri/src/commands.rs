@@ -238,6 +238,22 @@ pub fn set_hide_on_fullscreen(app: AppHandle, enabled: bool) {
 }
 
 #[tauri::command]
+pub fn set_edge_hide(app: AppHandle, enabled: bool) {
+    config::set_edge_hide(&app, enabled);
+}
+
+#[tauri::command]
+pub fn set_idle_ember_minutes(app: AppHandle, minutes: u32) {
+    config::set_idle_ember_minutes(&app, minutes);
+}
+
+/// 前端挂载时读取当前是否处于余烬状态（之后靠 idle://changed 事件更新）
+#[tauri::command]
+pub fn is_idle() -> bool {
+    crate::idle::is_idle()
+}
+
+#[tauri::command]
 pub fn open_repo() {
     let _ = modules::click::open_url(crate::REPO_URL);
 }

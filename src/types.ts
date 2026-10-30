@@ -122,6 +122,9 @@ export interface AppConfig {
   runners: RunnerConfig[];
   update: { auto: boolean; skippedVersion: string | null };
   hideOnFullscreen: boolean;
+  edgeHide: boolean;
+  /** 多少分钟没有操作后篝火变成余烬；0 为关闭 */
+  idleEmberMinutes: number;
   driver: DriverConfig;
 }
 

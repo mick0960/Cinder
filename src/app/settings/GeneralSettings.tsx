@@ -18,6 +18,8 @@ const isNet = (s: DriverSource) => s === "net_down" || s === "net_up" || s === "
 export function GeneralSettings() {
   const [autostart, setAutostart] = createSignal(false);
   const [hideOnFullscreen, setHideOnFullscreen] = createSignal(true);
+  const [edgeHide, setEdgeHide] = createSignal(true);
+  const [idleMinutes, setIdleMinutes] = createSignal(5);
   const [error, setError] = createSignal("");
   const [driveError, setDriveError] = createSignal("");
 
@@ -25,7 +27,11 @@ export function GeneralSettings() {
     // 篝火动画的实时预览需要订阅指标和模块输出
     initStores();
     invoke<boolean>("get_autostart").then(setAutostart).catch((e) => setError(String(e)));
-    invoke<AppConfig>("get_config").then((c) => setHideOnFullscreen(c.hideOnFullscreen ?? true));
+    invoke<AppConfig>("get_config").then((c) => {
+      setHideOnFullscreen(c.hideOnFullscreen ?? true);
+      setEdgeHide(c.edgeHide ?? true);
+      setIdleMinutes(c.idleEmberMinutes ?? 5);
+    });
   });
 
   const toggleAutostart = async (v: boolean) => {
@@ -43,6 +49,16 @@ export function GeneralSettings() {
   const toggleHideOnFullscreen = (v: boolean) => {
     setHideOnFullscreen(v);
     invoke("set_hide_on_fullscreen", { enabled: v });
+  };
+
+  const toggleEdgeHide = (v: boolean) => {
+    setEdgeHide(v);
+    invoke("set_edge_hide", { enabled: v });
+  };
+
+  const changeIdleMinutes = (m: number) => {
+    setIdleMinutes(m);
+    invoke("set_idle_ember_minutes", { minutes: m });
   };
 
   /* ---------- 篝火动画 ---------- */
@@ -112,8 +128,25 @@ export function GeneralSettings() {
         </span>
       </label>
 
+      <label class="upd-opt">
+        <input type="checkbox" checked={edgeHide()} onChange={(e) => toggleEdgeHide(e.currentTarget.checked)} />
+        <span>
+          贴边隐藏
+          <small>把篝火拖到屏幕边缘停住后缩进去一半，鼠标靠近时探出来，离开后缩回去。靠近另一块显示器的那条边也适用，缩进的部分会被裁掉，不会露到隔壁屏幕上。</small>
+        </span>
+      </label>
+
       <div class="upd-sep" />
       <div class="upd-title">篝火动画</div>
+      <div class="drive">
+        <label>离开
+          <select value={idleMinutes()} onChange={(e) => changeIdleMinutes(+e.currentTarget.value)}>
+            <For each={[0, 1, 3, 5, 10, 30]}>{(m) => <option value={m}>{m === 0 ? "不变" : `${m} 分钟`}</option>}</For>
+          </select>
+          后篝火变成余烬
+        </label>
+        <small class="drive-help">键盘或鼠标没有操作超过这个时间，篝火压暗并只缓慢明灭；一有操作立刻恢复。</small>
+      </div>
       <div class="drive">
         <label>动画速度由
           <select value={source()} onChange={(e) => changeSource(e.currentTarget.value as DriverSource)}>

@@ -20,7 +20,13 @@
   /* 浅色描边 + 轻投影：深色、浅色壁纸上都能看清 */
   filter: drop-shadow(0 0 0.7px rgba(255, 255, 255, 0.95)) drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.35));
 }
-.cat { object-fit: contain; image-rendering: auto; }
+.cat { object-fit: contain; image-rendering: auto; transition: filter 1.5s ease; }
+/* 用户离开：篝火压暗、偏红，像一堆余烬在缓慢明灭 */
+.cat.ember { filter: brightness(0.5) saturate(0.7) sepia(0.5) hue-rotate(-12deg); animation: ember-glow 3.6s ease-in-out infinite; }
+@keyframes ember-glow {
+  0%, 100% { filter: brightness(0.4) saturate(0.6) sepia(0.5) hue-rotate(-12deg); }
+  50% { filter: brightness(0.62) saturate(0.85) sepia(0.5) hue-rotate(-12deg); }
+}
 
 /* ---------- settings ---------- */
 html.settings-page,

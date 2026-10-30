@@ -1,7 +1,7 @@
 import { createSignal, onCleanup } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { character, runners, initStores, stepDriveLevel } from "./stores";
+import { character, runners, idle, initStores, stepDriveLevel } from "./stores";
 import "./panel.css";
 
 /** 悬浮图标窗口：固定 64×64、位置只由拖动改变；监控面板在独立的 panel 窗口里（见 PanelWindow.tsx） */
@@ -71,7 +71,8 @@ function useFrameClock(frames: () => number) {
     const hidden = document.hidden;
     if (!hidden) setFrame((f) => (f + 1) % Math.max(1, frames()));
     const level = stepDriveLevel(performance.now());
-    const interval = hidden ? 2000 : Math.max(80, 800 - 720 * level);
+    // 余烬：只留缓慢的明灭，不再随指标变化
+    const interval = hidden ? 2000 : idle() ? 1200 : Math.max(80, 800 - 720 * level);
     timer = window.setTimeout(tick, interval);
   };
   timer = window.setTimeout(tick, 400);
@@ -93,5 +94,5 @@ function Cat(props: { character: () => string }) {
     return r && r.frames.length > 0 ? r.frames : BUILTIN_FRAMES;
   };
   const frame = useFrameClock(() => frames().length);
-  return <img class="cat" width="64" height="64" draggable={false} src={frames()[frame() % frames().length]} />;
+  return <img class="cat" classList={{ ember: idle() }} width="64" height="64" draggable={false} src={frames()[frame() % frames().length]} />;
 }

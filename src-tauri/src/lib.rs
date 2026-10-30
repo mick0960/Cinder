@@ -1,8 +1,10 @@
 mod burn;
 mod commands;
 mod config;
+mod dock;
 mod fullscreen;
 mod gpu;
+mod idle;
 mod memclean;
 mod menu;
 mod metrics;
@@ -50,6 +52,8 @@ pub fn run() {
             let _ = tray::init(app.handle());
             metrics::start(app.handle().clone());
             fullscreen::start(app.handle().clone());
+            idle::start(app.handle().clone());
+            dock::start(app.handle().clone());
             modules::start(app.handle().clone());
             app.manage(updater::UpdateState::default());
             updater::start(app.handle().clone());
@@ -82,7 +86,9 @@ pub fn run() {
                 return;
             }
             if let tauri::WindowEvent::Moved(p) = event {
-                config::set_window_pos(window.app_handle(), p.x, p.y);
+                // 贴边缩进去时保存探出来的位置，而不是屏幕外的坐标
+                let (x, y) = dock::docked_home().unwrap_or((p.x, p.y));
+                config::set_window_pos(window.app_handle(), x, y);
                 // 面板窗口跟随图标
                 if metrics::panel_open() {
                     let _ = window.app_handle().emit_to("panel", "panel://anchor-moved", ());
@@ -112,6 +118,9 @@ pub fn run() {
             commands::get_autostart,
             commands::set_autostart,
             commands::set_hide_on_fullscreen,
+            commands::set_edge_hide,
+            commands::set_idle_ember_minutes,
+            commands::is_idle,
             commands::open_repo,
             commands::clean_memory,
             commands::burn_catch,
