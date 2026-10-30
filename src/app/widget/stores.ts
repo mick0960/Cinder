@@ -23,6 +23,7 @@ const [moduleHistory, setModuleHistory] = createSignal<Record<string, number[]>>
 const [modules, setModules] = createSignal<ModuleConfig[]>([]);
 const [runners, setRunners] = createSignal<RunnerConfig[]>([]);
 const [character, setCharacter] = createSignal<string>("bonfire");
+const [idle, setIdle] = createSignal(false);
 const [driver, setDriver] = createSignal<DriverConfig>(DEFAULT_DRIVER);
 const [metricHistory, setMetricHistory] = createSignal<MetricHistory>({ cpu: [], down: [], up: [], at: 0, stepMs: 1000 });
 
@@ -103,10 +104,13 @@ export function initStores() {
 
   listen<string>("character://changed", (e) => setCharacter(e.payload));
 
+  invoke<boolean>("is_idle").then(setIdle);
+  listen<boolean>("idle://changed", (e) => setIdle(e.payload));
+
   listen<DriverConfig>("config://driver", (e) => setDriver(e.payload ?? DEFAULT_DRIVER));
 }
 
-export { metrics, metricHistory, moduleOutputs, moduleHistory, modules, character, runners, driver };
+export { metrics, metricHistory, moduleOutputs, moduleHistory, modules, character, runners, driver, idle };
 
 export function fmtRate(bps: number): string {
   if (bps < 1024) return `${bps} B/s`;

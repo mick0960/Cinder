@@ -205,6 +205,10 @@ pub struct AppConfig {
     pub update: UpdateConfig,
     /// 有全屏程序 / 演示模式时自动隐藏图标，结束后恢复（见 fullscreen.rs）
     pub hide_on_fullscreen: bool,
+    /// 拖到屏幕边缘后缩进去一半，鼠标靠近再探出来（见 dock.rs）
+    pub edge_hide: bool,
+    /// 用户这么多分钟没有键鼠操作，篝火变成余烬；0 为关闭（见 idle.rs）
+    pub idle_ember_minutes: u32,
     /// 篝火动画速度的驱动指标，默认 CPU
     pub driver: DriverConfig,
 }
@@ -219,6 +223,8 @@ impl Default for AppConfig {
             runners: Vec::new(),
             update: UpdateConfig::default(),
             hide_on_fullscreen: true,
+            edge_hide: true,
+            idle_ember_minutes: 5,
             driver: DriverConfig::default(),
         }
     }
@@ -383,6 +389,26 @@ pub fn set_hide_on_fullscreen(app: &AppHandle, enabled: bool) {
         let state = app.state::<AppState>();
         let mut cfg = state.0.write().unwrap();
         cfg.hide_on_fullscreen = enabled;
+        cfg.clone()
+    };
+    save(app, &snapshot);
+}
+
+pub fn set_edge_hide(app: &AppHandle, enabled: bool) {
+    let snapshot = {
+        let state = app.state::<AppState>();
+        let mut cfg = state.0.write().unwrap();
+        cfg.edge_hide = enabled;
+        cfg.clone()
+    };
+    save(app, &snapshot);
+}
+
+pub fn set_idle_ember_minutes(app: &AppHandle, minutes: u32) {
+    let snapshot = {
+        let state = app.state::<AppState>();
+        let mut cfg = state.0.write().unwrap();
+        cfg.idle_ember_minutes = minutes;
         cfg.clone()
     };
     save(app, &snapshot);
