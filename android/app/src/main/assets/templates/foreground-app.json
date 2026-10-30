@@ -1,0 +1,11 @@
+{
+  "cinderModule": 1,
+  "id": "foreground-app",
+  "type": "command",
+  "shell": "shizuku",
+  "name": "前台应用",
+  "description": "当前在前台的应用包名（需要 Shizuku，以 shell 身份运行 dumpsys）",
+  "intervalMs": 5000,
+  "timeoutMs": 3000,
+  "command": "dumpsys activity activities | grep -m 1 'ResumedActivity:' | sed -E 's/.* u[0-9]+ ([^/ ]+)\\/.*/\\1/'"
+}

@@ -1,0 +1,57 @@
+name: Android Release
+
+# 推送形如 android-v0.1.0 的 tag 即触发：编译签名 APK 并发布 GitHub Release。
+# 与桌面版的 v* tag 互不影响；Android 的 Release 不标记为 latest，
+# 因为桌面版自动更新读取的是 releases/latest/download/latest.json。
+on:
+  push:
+    tags: ["android-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+
+      # 以 tag 为准同步版本号：android-v1.2.3 -> versionName 1.2.3、versionCode 10203
+      - name: Sync version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#android-v}"
+          CODE=$(echo "$VERSION" | awk -F. '{ printf "%d%02d%02d", $1, $2, $3 }')
+          sed -i -E "s/versionName = \".*\"/versionName = \"$VERSION\"/; s/versionCode = [0-9]+/versionCode = $CODE/" app/build.gradle.kts
+          grep -E "versionName|versionCode" app/build.gradle.kts
+
+      - name: Decode signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then echo "缺少 ANDROID_KEYSTORE_BASE64 等签名 secrets"; exit 1; fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+      - run: chmod +x gradlew
+      - run: ./gradlew --console=plain :app:testReleaseUnitTest :app:assembleRelease
+        env:
+          CINDER_KEYSTORE: ${{ runner.temp }}/release.jks
+          CINDER_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          CINDER_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          CINDER_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/Cinder-${GITHUB_REF_NAME#android-}.apk"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: "Cinder Android ${{ github.ref_name }}"
+          files: ${{ runner.temp }}/Cinder-*.apk
+          make_latest: false

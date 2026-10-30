@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Cinder</string>
+    <string name="widget_summary">篝火概览</string>
+    <string name="widget_summary_desc">CPU、内存、电量和网速一览</string>
+    <string name="widget_system">系统监控</string>
+    <string name="widget_system_desc">CPU 走势、内存、存储、电池与网络</string>
+    <string name="widget_modules">自定义模块</string>
+    <string name="widget_modules_desc">显示已启用的自定义监控模块</string>
+    <string name="widget_modules_title">模块</string>
+    <string name="widget_modules_empty">还没有启用的模块</string>
+    <string name="widget_refresh">刷新</string>
+    <string name="channel_monitor">实时监控</string>
+    <string name="channel_monitor_desc">小部件实时刷新时显示的常驻通知</string>
+</resources>

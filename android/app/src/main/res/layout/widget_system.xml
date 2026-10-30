@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:clipToOutline="true"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:id="@+id/root"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <include layout="@layout/widget_fire" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:baselineAligned="true"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/cpu_value"
+                        style="@style/WidgetText.Big"
+                        android:text="—" />
+
+                    <TextView
+                        android:id="@+id/cpu_label"
+                        style="@style/WidgetText.Label"
+                        android:layout_marginStart="6dp"
+                        android:text="CPU" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/cpu_sub"
+                    style="@style/WidgetText.Label"
+                    android:layout_marginTop="2dp"
+                    android:text="" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/bat_value"
+                    style="@style/WidgetText"
+                    android:text="—" />
+
+                <TextView
+                    android:id="@+id/net_value"
+                    style="@style/WidgetText.Label"
+                    android:layout_marginTop="3dp"
+                    android:text="↓ —  ↑ —" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/cpu_chart"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginBottom="4dp"
+            android:layout_weight="1"
+            android:contentDescription="@null"
+            android:scaleType="fitXY" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="10dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        style="@style/WidgetText.Label"
+                        android:text="内存" />
+
+                    <TextView
+                        android:id="@+id/mem_value"
+                        style="@style/WidgetText"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:gravity="end"
+                        android:text="—" />
+                </LinearLayout>
+
+                <ImageView
+                    android:id="@+id/mem_bar"
+                    style="@style/WidgetBar"
+                    android:layout_marginBottom="0dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        style="@style/WidgetText.Label"
+                        android:text="存储" />
+
+                    <TextView
+                        android:id="@+id/disk_value"
+                        style="@style/WidgetText"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:gravity="end"
+                        android:text="—" />
+                </LinearLayout>
+
+                <ImageView
+                    android:id="@+id/disk_bar"
+                    style="@style/WidgetBar"
+                    android:layout_marginBottom="0dp" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

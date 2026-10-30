@@ -1,0 +1,32 @@
+{
+  "cinderModule": 1,
+  "id": "clash-traffic",
+  "type": "http",
+  "name": "Clash 订阅流量",
+  "description": "读取订阅链接响应头 Subscription-Userinfo，显示已用流量和剩余天数（移植自桌面版 clash-traffic.ps1）",
+  "style": "progress",
+  "intervalMs": 600000,
+  "timeoutMs": 10000,
+  "params": [
+    {
+      "key": "url",
+      "label": "订阅链接",
+      "type": "url",
+      "secret": true,
+      "required": true
+    }
+  ],
+  "request": {
+    "method": "HEAD",
+    "url": "${params.url}",
+    "headers": {
+      "User-Agent": "clash-verge/v2.0.0"
+    }
+  },
+  "map": {
+    "vars": "const u = kv(need(headers['subscription-userinfo'], '响应头缺少 Subscription-Userinfo')); const used = (u.upload || 0) + (u.download || 0); const ratio = u.total > 0 ? Math.min(1, used / u.total) : 0; const days = u.expire > 0 ? Math.ceil((u.expire * 1000 - Date.now()) / 86400000) : null;",
+    "text": "(used / 2 ** 30).toFixed(1) + ' / ' + (u.total / 2 ** 30).toFixed(0) + ' GB (' + pct(ratio, 1) + ')' + (days === null ? '' : days >= 0 ? ' · 剩 ' + days + ' 天' : ' · 已过期')",
+    "value": "ratio",
+    "color": "ratio >= 0.9 ? '#ff5c5c' : ratio >= 0.7 ? '#ffb84c' : '#4cd48a'"
+  }
+}

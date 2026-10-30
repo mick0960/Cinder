@@ -1,0 +1,21 @@
+{
+  "cinderModule": 1,
+  "id": "ping-latency",
+  "type": "command",
+  "shell": "sh",
+  "name": "网络延迟",
+  "description": "ping 一次指定主机，显示往返耗时",
+  "style": "sparkline",
+  "unit": " ms",
+  "intervalMs": 10000,
+  "timeoutMs": 5000,
+  "params": [
+    {
+      "key": "host",
+      "label": "主机",
+      "default": "baidu.com",
+      "required": true
+    }
+  ],
+  "command": "ping -c 1 -W 2 \"$CINDER_PARAM_HOST\" | sed -n 's/.*time=\\([0-9.]*\\).*/\\1/p'"
+}

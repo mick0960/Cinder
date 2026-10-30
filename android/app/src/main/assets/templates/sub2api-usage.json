@@ -1,0 +1,25 @@
+{
+  "cinderModule": 1,
+  "id": "sub2api-usage",
+  "type": "script",
+  "name": "sub2api 账号用量",
+  "description": "通过管理员 API 读取所有账号各时间窗口的占用率，按账号分组显示（移植自桌面版 sub2api-usage.ps1）",
+  "style": "progress",
+  "intervalMs": 300000,
+  "timeoutMs": 45000,
+  "params": [
+    {
+      "key": "key",
+      "label": "管理员 API Key",
+      "secret": true,
+      "required": true
+    },
+    {
+      "key": "baseUrl",
+      "label": "服务地址",
+      "type": "url",
+      "default": "https://ai.mmmick.cn"
+    }
+  ],
+  "script": "export default async function (ctx) {\n  const api = (ctx.params.baseUrl || 'https://ai.mmmick.cn').replace(/\\/+$/, '') + '/api/v1/admin';\n  const call = async (path, opts = {}) => {\n    const r = await ctx.http.request({\n      url: api + path,\n      method: opts.method || 'GET',\n      headers: { 'x-api-key': ctx.params.key, ...(opts.body ? { 'Content-Type': 'application/json' } : {}) },\n      body: opts.body,\n      timeoutMs: 15000,\n    });\n    if (!r.ok) throw new Error(path + '：HTTP ' + r.status);\n    const j = r.json();\n    if (j.code !== 0) throw new Error(path + '：' + j.message);\n    return j.data;\n  };\n\n  const left = (s) => {\n    if (s <= 0) return '已重置';\n    const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);\n    if (d >= 1) return d + '天' + h + '时';\n    if (s >= 3600) return Math.floor(s / 3600) + '时' + m + '分';\n    return Math.max(1, m) + '分';\n  };\n\n  const items = [];\n  let max = 0;\n  const addWindow = (group, label, ratio, secs) => {\n    ratio = Math.min(1, Math.max(0, ratio));\n    if (ratio > max) max = ratio;\n    items.push({ group, label, value: ratio, text: Math.round(ratio * 100) + '% · ' + left(secs) });\n  };\n  const addNote = (group, text) => items.push({ group, label: '—', value: null, text });\n\n  // 1. 账号列表（翻页取全）\n  let accounts = [];\n  let page = 1;\n  let d;\n  do {\n    d = await call('/accounts?page=' + page + '&page_size=100');\n    accounts = accounts.concat(d.items || []);\n    page++;\n  } while ((d.items || []).length > 0 && accounts.length < d.total);\n  if (accounts.length === 0) return { text: '无账号', value: 0 };\n\n  // 2. 批量查询 OAuth 类账号的 5h / 7d 窗口\n  const batch = await call('/accounts/usage/batch', {\n    method: 'POST',\n    body: JSON.stringify({ account_ids: accounts.map((a) => Number(a.id)) }),\n  });\n  const usage = batch.usage || {};\n  const errors = batch.errors || {};\n  const windows = { five_hour: '5h', seven_day: '7d' };\n  const ocWindows = { rolling: '滚动', weekly: '周', monthly: '月' };\n\n  for (const a of accounts) {\n    const id = String(a.id);\n    const group = a.status === 'active' ? a.name : a.name + '（' + a.status + '）';\n    const u = usage[id];\n    if (u) {\n      for (const [k, label] of Object.entries(windows)) {\n        const w = u[k];\n        if (w) addWindow(group, label, w.utilization / 100, w.remaining_seconds);\n      }\n      continue;\n    }\n    // 3. 不支持批量查询的平台单独补查\n    if (a.platform === 'opencode_go') {\n      try {\n        const snap = (await call('/accounts/' + id + '/opencode-go-usage')).snapshot;\n        for (const [k, label] of Object.entries(ocWindows)) {\n          const w = snap && snap.data && snap.data[k];\n          if (!w) continue;\n          if (w.status !== 'ok') { addNote(group, label + '：' + w.status); continue; }\n          const secs = w.resets_at ? (Date.parse(w.resets_at) - Date.now()) / 1000 : 0;\n          addWindow(group, label, w.percent / 100, secs);\n        }\n      } catch (e) {\n        addNote(group, '查询失败：' + e.message);\n      }\n      continue;\n    }\n    addNote(group, errors[id] || '无用量数据');\n  }\n\n  return { text: accounts.length + ' 个账号', value: max, items };\n}\n"
+}

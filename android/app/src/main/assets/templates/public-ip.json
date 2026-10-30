@@ -1,0 +1,16 @@
+{
+  "cinderModule": 1,
+  "id": "public-ip",
+  "type": "http",
+  "name": "公网 IP",
+  "description": "显示当前出口 IP（经代理时为代理出口）",
+  "intervalMs": 300000,
+  "timeoutMs": 8000,
+  "request": {
+    "method": "GET",
+    "url": "https://api.ipify.org?format=json"
+  },
+  "map": {
+    "text": "need(json && json.ip, '返回内容不是预期的格式')"
+  }
+}

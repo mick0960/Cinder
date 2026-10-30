@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 小部件进度条的填充：ImageView.setImageLevel 控制长度（0–10000），setColorFilter 上色。
+     不用 ProgressBar 的着色：HyperOS 桌面上同一个小部件里的多根 ProgressBar 会共用着色 -->
+<clip xmlns:android="http://schemas.android.com/apk/res/android"
+    android:clipOrientation="horizontal"
+    android:gravity="start|fill_vertical">
+    <shape android:shape="rectangle">
+        <corners android:radius="3dp" />
+        <solid android:color="#FFFFFFFF" />
+    </shape>
+</clip>

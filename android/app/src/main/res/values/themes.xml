@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Cinder" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/panel_bottom</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <!-- 小部件文字 -->
+    <style name="WidgetText">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="WidgetText.Label">
+        <item name="android:textColor">@color/label</item>
+        <item name="android:textSize">11sp</item>
+    </style>
+
+    <style name="WidgetText.Big">
+        <item name="android:textSize">22sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <!-- 进度条：背景是轨道，前景是按 level 裁剪的填充（见 widget_bar_fill.xml） -->
+    <style name="WidgetBar">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">4dp</item>
+        <item name="android:layout_marginTop">3dp</item>
+        <item name="android:layout_marginBottom">5dp</item>
+        <item name="android:background">@drawable/widget_bar_track</item>
+        <item name="android:src">@drawable/widget_bar_fill</item>
+        <item name="android:scaleType">fitXY</item>
+        <item name="android:contentDescription">@null</item>
+    </style>
+</resources>

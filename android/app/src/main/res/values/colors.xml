@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 与桌面版面板（panel.css）一致 -->
+    <color name="panel_top">#24242A</color>
+    <color name="panel_bottom">#18181C</color>
+    <color name="text">#EEEEEE</color>
+    <color name="label">#9A9AA2</color>
+    <color name="sub">#8A8A92</color>
+    <color name="group">#DDDDDD</color>
+    <color name="track">#14FFFFFF</color>
+    <color name="accent">#4CC2FF</color>
+    <color name="launcher_bg">#1E1E24</color>
+</resources>

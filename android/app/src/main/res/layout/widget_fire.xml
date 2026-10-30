@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 篝火：静态图（每次刷新换一帧）与 ViewFlipper 动画二选一，由设置决定显示哪个 -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="40dp"
+    android:layout_height="40dp">
+
+    <ImageView
+        android:id="@+id/fire_static"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:src="@drawable/bonfire_1" />
+
+    <ViewFlipper
+        android:id="@+id/fire_anim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:autoStart="true"
+        android:flipInterval="400"
+        android:visibility="gone">
+
+        <ImageView android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:src="@drawable/bonfire_1" />
+        <ImageView android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:src="@drawable/bonfire_2" />
+        <ImageView android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:src="@drawable/bonfire_3" />
+        <ImageView android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:src="@drawable/bonfire_4" />
+        <ImageView android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:src="@drawable/bonfire_5" />
+        <ImageView android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:src="@drawable/bonfire_6" />
+        <ImageView android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:src="@drawable/bonfire_7" />
+        <ImageView android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:src="@drawable/bonfire_8" />
+    </ViewFlipper>
+</FrameLayout>

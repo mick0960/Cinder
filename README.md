@@ -303,9 +303,21 @@ if (Get-Process -Name Code -ErrorAction SilentlyContinue) { '运行中' } else {
 - 在 设置 → **关于** 可切换为**手动更新**（仅提示，由你决定是否下载），也可以随时点击“检查更新”。
 - 选择“下次再说”的版本不会再次打扰你，更新的版本发布后会再次提示。
 
+## Android 版
+
+`android/` 目录里是独立的 Android 版（原生 Kotlin）。它提供：
+
+- 桌面小部件；
+- CPU / 内存 / 存储 / 电池 / 网络监控（可选 Shizuku 显示真实 CPU 占用）；
+- 可导入的自定义监控模块：JS 脚本、HTTP 请求、Shell 命令三种写法，输出格式与桌面版相同。
+
+安装包发布在 `android-v*` 开头的 Release 里。详见 [android/README.md](android/README.md)。
+
 ## 技术栈
 
-[Tauri 2](https://tauri.app/)（Rust）+ [SolidJS](https://www.solidjs.com/) + Vite。
+桌面版：[Tauri 2](https://tauri.app/)（Rust）+ [SolidJS](https://www.solidjs.com/) + Vite。
+
+Android 版：Kotlin + Jetpack Compose + RemoteViews 小部件，QuickJS（[quickjs-kt](https://github.com/dokar3/quickjs-kt)）运行模块脚本，[Shizuku](https://shizuku.rikka.app/) 提供可选的特权数据。
 
 ## 许可
 

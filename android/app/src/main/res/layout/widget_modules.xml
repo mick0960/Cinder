@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:clipToOutline="true"
+    android:paddingStart="12dp"
+    android:paddingTop="8dp"
+    android:paddingEnd="8dp"
+    android:paddingBottom="8dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:id="@+id/header"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:contentDescription="@null"
+                android:src="@drawable/bonfire_1" />
+
+            <TextView
+                style="@style/WidgetText"
+                android:layout_width="0dp"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:text="@string/widget_modules_title"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/updated"
+                style="@style/WidgetText.Label"
+                android:layout_marginEnd="4dp"
+                android:textSize="10sp" />
+
+            <ImageView
+                android:id="@+id/refresh"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:contentDescription="@string/widget_refresh"
+                android:padding="5dp"
+                android:src="@drawable/ic_refresh" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <ListView
+                android:id="@+id/list"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:divider="@null"
+                android:dividerHeight="0dp"
+                android:paddingEnd="4dp"
+                android:scrollbars="none" />
+
+            <TextView
+                android:id="@+id/empty"
+                style="@style/WidgetText.Label"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="@string/widget_modules_empty"
+                android:visibility="gone" />
+        </FrameLayout>
+    </LinearLayout>
+</FrameLayout>
