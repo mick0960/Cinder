@@ -3,7 +3,7 @@
 //! 托盘菜单、全屏自动隐藏、重复启动都经过这里：监控面板随图标一起收起；
 //! “显示”总会把图标拉到同层窗口的最上面——取消置顶后图标被别的窗口盖住时，只有这样才叫得回来。
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -104,5 +104,105 @@ fn raise(app: &AppHandle) {
         if !on_top {
             SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, FLAGS);
         }
+    }
+}
+
+/// 剥离桌面悬浮窗的非客户区边框样式，并拦截后续样式修改与非客户区重绘，
+/// 防止 `tao` 在 `show`/`hide`/`set_always_on_top`/`set_focusable` 或 `SetWindowRgn`
+/// 裁剪切换期间还原出系统标题栏与边框。
+#[cfg(windows)]
+pub fn init_frameless(hwnd: isize) {
+    use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        CallWindowProcW, GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, GWLP_WNDPROC,
+        GWL_EXSTYLE, GWL_STYLE, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+        SWP_NOZORDER, WM_NCACTIVATE, WM_NCPAINT, WM_STYLECHANGING, WNDPROC, WS_BORDER,
+        WS_CAPTION, WS_CLIPCHILDREN, WS_DLGFRAME, WS_EX_CLIENTEDGE, WS_EX_DLGMODALFRAME,
+        WS_EX_STATICEDGE, WS_EX_WINDOWEDGE, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP,
+        WS_SYSMENU, WS_THICKFRAME,
+    };
+
+    #[repr(C)]
+    struct StyleStruct {
+        style_old: u32,
+        style_new: u32,
+    }
+
+    const STRIP_STYLE: u32 = WS_CAPTION
+        | WS_BORDER
+        | WS_DLGFRAME
+        | WS_THICKFRAME
+        | WS_SYSMENU
+        | WS_MINIMIZEBOX
+        | WS_MAXIMIZEBOX;
+    const STRIP_EXSTYLE: u32 =
+        WS_EX_WINDOWEDGE | WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE;
+
+    static PREV_PROC: AtomicIsize = AtomicIsize::new(0);
+
+    unsafe extern "system" fn frameless_proc(
+        hwnd: HWND,
+        msg: u32,
+        wparam: WPARAM,
+        lparam: LPARAM,
+    ) -> LRESULT {
+        match msg {
+            WM_STYLECHANGING if lparam != 0 => {
+                let ss = unsafe { &mut *(lparam as *mut StyleStruct) };
+                if wparam as i32 == GWL_STYLE {
+                    ss.style_new = (ss.style_new & !STRIP_STYLE) | WS_POPUP | WS_CLIPCHILDREN;
+                } else if wparam as i32 == GWL_EXSTYLE {
+                    ss.style_new &= !STRIP_EXSTYLE;
+                }
+                return 0;
+            }
+            WM_NCPAINT => return 0,
+            WM_NCACTIVATE => {
+                let prev = PREV_PROC.load(Ordering::Relaxed);
+                if prev != 0 {
+                    let proc: WNDPROC = unsafe { std::mem::transmute(prev) };
+                    // lParam = -1 指示 DefWindowProcW 不要重绘非客户区边框
+                    return unsafe { CallWindowProcW(proc, hwnd, msg, wparam, -1) };
+                }
+                return 1;
+            }
+            _ => {}
+        }
+        let prev = PREV_PROC.load(Ordering::Relaxed);
+        if prev != 0 {
+            let proc: WNDPROC = unsafe { std::mem::transmute(prev) };
+            unsafe { CallWindowProcW(proc, hwnd, msg, wparam, lparam) }
+        } else {
+            0
+        }
+    }
+
+    let hwnd = hwnd as HWND;
+    unsafe {
+        let prev = SetWindowLongPtrW(
+            hwnd,
+            GWLP_WNDPROC,
+            frameless_proc as *const () as usize as isize,
+        );
+        if prev != 0 {
+            PREV_PROC.store(prev, Ordering::Relaxed);
+        }
+        let style = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
+        SetWindowLongPtrW(
+            hwnd,
+            GWL_STYLE,
+            ((style & !STRIP_STYLE) | WS_POPUP | WS_CLIPCHILDREN) as isize,
+        );
+        let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
+        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, (ex_style & !STRIP_EXSTYLE) as isize);
+        SetWindowPos(
+            hwnd,
+            std::ptr::null_mut(),
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+        );
     }
 }

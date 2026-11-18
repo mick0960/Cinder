@@ -99,45 +99,86 @@ fn monitor_rect(hwnd: isize) -> Option<RECT> {
     (unsafe { GetMonitorInfoW(mon, &mut mi) } != 0).then_some(mi.rcMonitor)
 }
 
-/// 把窗口裁剪到显示器矩形内（窗口左上角在 x, y，大小 w × h）；完全在内部时取消裁剪
-fn clip(hwnd: isize, x: i32, y: i32, w: i32, h: i32, mon: &RECT) {
+/// 记录当前已应用的窗口裁剪矩形（相对窗口左上角）；None 表示当前未裁剪。
+/// 避免在未裁剪状态下每次移动都重复调用 SetWindowRgn(NULL, 1) 触发非客户区刷新。
+static CLIP_RECT: Mutex<Option<(i32, i32, i32, i32)>> = Mutex::new(None);
+
+/// 计算窗口在显示器矩形内的可见区域（相对窗口左上角）；完全在内部时返回 None
+fn calc_clip_rect(x: i32, y: i32, w: i32, h: i32, mon: &RECT) -> Option<(i32, i32, i32, i32)> {
     let (l, t) = (x.max(mon.left), y.max(mon.top));
     let (rt, b) = ((x + w).min(mon.right), (y + h).min(mon.bottom));
+    if l <= x && t <= y && rt >= x + w && b >= y + h {
+        None
+    } else {
+        Some((l - x, t - y, (rt - l).max(0) + l - x, (b - t).max(0) + t - y))
+    }
+}
+
+fn apply_clip(hwnd: isize, next: Option<(i32, i32, i32, i32)>) {
+    let mut cur = CLIP_RECT.lock().unwrap();
+    if *cur == next {
+        return;
+    }
+    *cur = next;
     unsafe {
-        if l <= x && t <= y && rt >= x + w && b >= y + h {
-            unclip(hwnd);
-        } else {
-            // 区域坐标相对窗口左上角；区域的所有权随调用转给系统
-            SetWindowRgn(hwnd as _, CreateRectRgn(l - x, t - y, (rt - l).max(0) + l - x, (b - t).max(0) + t - y), 1);
+        match next {
+            Some((l, t, r, b)) => {
+                // 区域坐标相对窗口左上角；区域的所有权随调用转给系统
+                SetWindowRgn(hwnd as _, CreateRectRgn(l, t, r, b), 1);
+            }
+            None => {
+                SetWindowRgn(hwnd as _, std::ptr::null_mut(), 1);
+            }
         }
     }
 }
 
+/// 把窗口裁剪到显示器矩形内（窗口左上角在 x, y，大小 w × h）；完全在内部时取消裁剪
+fn clip(hwnd: isize, x: i32, y: i32, w: i32, h: i32, mon: &RECT) {
+    apply_clip(hwnd, calc_clip_rect(x, y, w, h, mon));
+}
+
 fn unclip(hwnd: isize) {
-    unsafe {
-        SetWindowRgn(hwnd as _, std::ptr::null_mut(), 1);
-    }
+    apply_clip(hwnd, None);
 }
 
 fn move_to(hwnd: isize, x: i32, y: i32, mon: &RECT) {
-    if let Some(r) = window_rect(hwnd) {
-        clip(hwnd, x, y, r.right - r.left, r.bottom - r.top, mon);
+    let next_clip = window_rect(hwnd)
+        .and_then(|r| calc_clip_rect(x, y, r.right - r.left, r.bottom - r.top, mon));
+    // 缩进屏幕边缘（需要裁剪）时：先裁剪再移动，防止越界部分在隔壁显示器闪现；
+    // 探出回到屏幕内（取消裁剪）时：先移动到位再解除裁剪，防止在旧位置提前暴露整窗。
+    if next_clip.is_some() {
+        apply_clip(hwnd, next_clip);
     }
     unsafe {
         SetWindowPos(hwnd as _, std::ptr::null_mut(), x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     }
+    if next_clip.is_none() {
+        apply_clip(hwnd, None);
+    }
 }
 
 fn animate(hwnd: isize, from: (i32, i32), to: (i32, i32), mon: &RECT) {
-    for i in 1..=ANIM_STEPS {
-        let t = i as f32 / ANIM_STEPS as f32;
-        let e = 1.0 - (1.0 - t).powi(3); // ease-out
-        let x = from.0 + ((to.0 - from.0) as f32 * e).round() as i32;
-        let y = from.1 + ((to.1 - from.1) as f32 * e).round() as i32;
-        move_to(hwnd, x, y, mon);
-        std::thread::sleep(ANIM_FRAME);
+    if from == to {
+        move_to(hwnd, to.0, to.1, mon);
+        return;
     }
-    move_to(hwnd, to.0, to.1, mon);
+    for i in 1..=ANIM_STEPS {
+        let (x, y) = if i == ANIM_STEPS {
+            to
+        } else {
+            let t = i as f32 / ANIM_STEPS as f32;
+            let e = 1.0 - (1.0 - t).powi(3); // ease-out
+            (
+                from.0 + ((to.0 - from.0) as f32 * e).round() as i32,
+                from.1 + ((to.1 - from.1) as f32 * e).round() as i32,
+            )
+        };
+        move_to(hwnd, x, y, mon);
+        if i < ANIM_STEPS {
+            std::thread::sleep(ANIM_FRAME);
+        }
+    }
 }
 
 fn cursor() -> Option<POINT> {
