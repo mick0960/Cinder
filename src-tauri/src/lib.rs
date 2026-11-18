@@ -39,6 +39,10 @@ pub fn run() {
                 let _ = win.set_position(tauri::PhysicalPosition::new(cx, cy));
                 // Windows 创建窗口时会把宽度钳到系统最小值(~136)，这里显式收缩回 64
                 let _ = win.set_size(tauri::LogicalSize::new(64.0, 64.0));
+                // 悬浮窗无边框保护（阻止 tao 后续样式同步还原 WS_CAPTION / WS_EX_WINDOWEDGE 与非客户区绘制）
+                if let Ok(hwnd) = win.hwnd() {
+                    widget::init_frameless(hwnd.0 as isize);
+                }
                 // 悬浮窗不抢键盘焦点（WS_EX_NOACTIVATE）
                 let _ = win.set_focusable(false);
                 let _ = win.show();
