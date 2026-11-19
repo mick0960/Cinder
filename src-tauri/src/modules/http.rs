@@ -1,8 +1,9 @@
-//! 原生 HTTP 模块：GET 一个网址，按 JSON 字段路径取值。不经过 shell，所有 HTTP 模块共用一个连接池。
+//! 原生 HTTP 模块：支持 GET / HEAD / POST、自定义请求头、响应头提取与直连/跳过 TLS 校验。不经过 shell，按连接选项共用连接池。
 
 use std::sync::OnceLock;
 use std::time::Duration;
 
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue, ACCEPT, CONTENT_TYPE};
 use serde_json::Value;
 
 use super::value::extract_num;
@@ -14,37 +15,125 @@ const MAX_BODY: usize = 1024 * 1024;
 /// 没有填 JSON 路径时，直接显示响应文本的最大长度
 const MAX_TEXT_CHARS: usize = 200;
 
-fn client() -> Result<&'static reqwest::Client, String> {
-    static CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
-    CLIENT
-        .get_or_init(|| {
-            // 与更新插件共用进程级的加密提供者：谁先用到谁安装
-            if rustls::crypto::CryptoProvider::get_default().is_none() {
-                let _ = rustls::crypto::ring::default_provider().install_default();
-            }
-            reqwest::Client::builder()
-                .user_agent(concat!("Cinder/", env!("CARGO_PKG_VERSION")))
-                .build()
-                .map_err(|e| format!("无法初始化 HTTP 客户端: {e}"))
-        })
-        .as_ref()
-        .map_err(Clone::clone)
+fn client(no_proxy: bool, insecure: bool) -> Result<&'static reqwest::Client, String> {
+    static NORMAL: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
+    static NO_PROXY: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
+    static INSECURE: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
+    static NO_PROXY_INSECURE: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
+
+    let slot = match (no_proxy, insecure) {
+        (false, false) => &NORMAL,
+        (true, false) => &NO_PROXY,
+        (false, true) => &INSECURE,
+        (true, true) => &NO_PROXY_INSECURE,
+    };
+
+    slot.get_or_init(|| {
+        // 与更新插件共用进程级的加密提供者：谁先用到谁安装
+        if rustls::crypto::CryptoProvider::get_default().is_none() {
+            let _ = rustls::crypto::ring::default_provider().install_default();
+        }
+        let mut builder = reqwest::Client::builder()
+            .user_agent(concat!("Cinder/", env!("CARGO_PKG_VERSION")));
+        if no_proxy {
+            builder = builder.no_proxy();
+        }
+        if insecure {
+            builder = builder.tls_danger_accept_invalid_certs(true);
+        }
+        builder
+            .build()
+            .map_err(|e| format!("无法初始化 HTTP 客户端: {e}"))
+    })
+    .as_ref()
+    .map_err(Clone::clone)
+}
+
+fn parse_method(raw: &str) -> Result<reqwest::Method, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(reqwest::Method::GET);
+    }
+    match trimmed.to_ascii_uppercase().as_str() {
+        "GET" => Ok(reqwest::Method::GET),
+        "HEAD" => Ok(reqwest::Method::HEAD),
+        "POST" => Ok(reqwest::Method::POST),
+        other => Err(format!("不支持的请求方法：{other}")),
+    }
+}
+
+fn build_headers(cfg: &ModuleConfig, method: &reqwest::Method) -> Result<HeaderMap, String> {
+    let mut headers = HeaderMap::new();
+    for row in &cfg.http_headers {
+        let name_raw = row.name.trim();
+        if name_raw.is_empty() {
+            continue;
+        }
+        let name = HeaderName::from_bytes(name_raw.as_bytes())
+            .map_err(|_| format!("请求头名称无效：{name_raw}"))?;
+        // 绝不在错误消息中回显请求头的值，避免面板或日志泄露密钥
+        let value = HeaderValue::from_str(&row.value)
+            .map_err(|_| format!("请求头 {name_raw} 的值格式无效"))?;
+        headers.insert(name, value);
+    }
+    if !headers.contains_key(ACCEPT) {
+        headers.insert(ACCEPT, HeaderValue::from_static("application/json, text/plain, */*"));
+    }
+    if *method == reqwest::Method::POST
+        && !cfg.http_body.is_empty()
+        && !headers.contains_key(CONTENT_TYPE)
+    {
+        let trimmed = cfg.http_body.trim();
+        if trimmed.starts_with('{') || trimmed.starts_with('[') {
+            headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        }
+    }
+    Ok(headers)
+}
+
+fn parse_response_header(raw: &str) -> Result<Option<(&str, HeaderName)>, String> {
+    let target = raw.trim();
+    if target.is_empty() {
+        return Ok(None);
+    }
+    let name = HeaderName::from_bytes(target.as_bytes())
+        .map_err(|_| format!("响应头名称无效：{target}"))?;
+    Ok(Some((target, name)))
 }
 
 pub async fn fetch(cfg: &ModuleConfig) -> Result<Reading, String> {
     let url = parse_url(&cfg.url)?;
+    let method = parse_method(&cfg.http_method)?;
+    let headers = build_headers(cfg, &method)?;
+    let resp_header = parse_response_header(&cfg.http_response_header)?;
     let timeout = Duration::from_millis(cfg.timeout_ms.clamp(500, 60_000));
-    let client = client()?;
+    let client = client(cfg.http_no_proxy, cfg.http_insecure)?;
+
+    let mut req = client.request(method.clone(), url).headers(headers);
+    if method == reqwest::Method::POST && !cfg.http_body.is_empty() {
+        req = req.body(cfg.http_body.clone());
+    }
 
     let request = async {
-        let mut resp = client
-            .get(url)
-            .header(reqwest::header::ACCEPT, "application/json, text/plain, */*")
-            .send()
-            .await
-            .map_err(describe)?;
-        if !resp.status().is_success() {
-            return Err(format!("HTTP {}", resp.status().as_u16()));
+        let mut resp = req.send().await.map_err(describe)?;
+        let status = resp.status();
+        if !status.is_success() {
+            return Err(format!("HTTP {}", status.as_u16()));
+        }
+        if let Some((target, header_name)) = resp_header {
+            let val = resp
+                .headers()
+                .get(&header_name)
+                .ok_or_else(|| format!("响应头缺少 {target}"))?;
+            let header_text = super::decode::decode(val.as_bytes());
+            return reading_from_body(&header_text, &cfg.json_path);
+        }
+        if method == reqwest::Method::HEAD {
+            let code = status.as_u16();
+            return Ok(Reading {
+                text: code.to_string(),
+                num: Some(code as f64),
+            });
         }
         let mut body = Vec::new();
         while let Some(chunk) = resp.chunk().await.map_err(describe)? {
@@ -53,14 +142,13 @@ pub async fn fetch(cfg: &ModuleConfig) -> Result<Reading, String> {
             }
             body.extend_from_slice(&chunk);
         }
-        Ok(body)
+        reading_from_body(&super::decode::decode(&body), &cfg.json_path)
     };
     // 整个请求（含读取正文）共用一个超时
-    let body = match tokio::time::timeout(timeout, request).await {
-        Ok(res) => res?,
-        Err(_) => return Err(format!("超时 ({} ms)", timeout.as_millis())),
-    };
-    reading_from_body(&super::decode::decode(&body), &cfg.json_path)
+    match tokio::time::timeout(timeout, request).await {
+        Ok(res) => res,
+        Err(_) => Err(format!("超时 ({} ms)", timeout.as_millis())),
+    }
 }
 
 /// 校验并解析网址；点击动作的“打开网址”也用同一套规则
@@ -323,6 +411,176 @@ mod tests {
         let req = server.await.unwrap();
         assert!(req.starts_with("GET /metrics?token=secret HTTP/1.1"), "{req}");
         assert!(req.to_lowercase().contains("user-agent: cinder/"), "{req}");
+    }
+
+    async fn spawn_server(response: impl Into<String>) -> (u16, tokio::task::JoinHandle<String>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let response = response.into();
+        let handle = tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut buf = Vec::new();
+            let mut tmp = [0u8; 2048];
+            loop {
+                let n = sock.read(&mut tmp).await.unwrap();
+                if n == 0 {
+                    break;
+                }
+                buf.extend_from_slice(&tmp[..n]);
+                if let Some(end) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                    let head = String::from_utf8_lossy(&buf[..end]).to_ascii_lowercase();
+                    let content_len = head
+                        .lines()
+                        .find_map(|l| l.strip_prefix("content-length:"))
+                        .and_then(|v| v.trim().parse::<usize>().ok())
+                        .unwrap_or(0);
+                    if buf.len() >= end + 4 + content_len {
+                        break;
+                    }
+                }
+            }
+            sock.write_all(response.as_bytes()).await.unwrap();
+            String::from_utf8_lossy(&buf).into_owned()
+        });
+        (port, handle)
+    }
+
+    #[tokio::test]
+    async fn head_custom_ua_and_response_header_extraction() {
+        use crate::config::HttpHeader;
+        let (port, server) = spawn_server(
+            "HTTP/1.1 200 OK\r\nsubscription-userinfo: upload=1024; download=2048; total=4096\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        )
+        .await;
+        let cfg = ModuleConfig {
+            kind: "http".into(),
+            url: format!("http://127.0.0.1:{port}/sub"),
+            http_method: " head ".into(),
+            http_headers: vec![HttpHeader {
+                name: "User-Agent".into(),
+                value: "CustomProbe/2.0".into(),
+            }],
+            http_response_header: "Subscription-Userinfo".into(),
+            timeout_ms: 3000,
+            ..Default::default()
+        };
+        let r = fetch(&cfg).await.unwrap();
+        assert_eq!(r.text, "upload=1024; download=2048; total=4096");
+        assert_eq!(r.num, Some(1024.0));
+        let req = server.await.unwrap();
+        let lower = req.to_ascii_lowercase();
+        assert!(req.starts_with("HEAD /sub HTTP/1.1"), "{req}");
+        assert!(lower.contains("user-agent: customprobe/2.0\r\n"), "{req}");
+        assert!(!lower.contains("cinder/"), "{req}");
+    }
+
+    #[tokio::test]
+    async fn head_without_response_header_returns_status_code() {
+        let (port, server) = spawn_server("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n").await;
+        let cfg = ModuleConfig {
+            kind: "http".into(),
+            url: format!("http://127.0.0.1:{port}/health"),
+            http_method: "HEAD".into(),
+            timeout_ms: 3000,
+            ..Default::default()
+        };
+        let r = fetch(&cfg).await.unwrap();
+        assert_eq!((r.text.as_str(), r.num), ("204", Some(204.0)));
+        let req = server.await.unwrap();
+        assert!(req.starts_with("HEAD /health HTTP/1.1"), "{req}");
+    }
+
+    #[tokio::test]
+    async fn post_json_body_with_custom_header_and_json_path() {
+        use crate::config::HttpHeader;
+        let resp_body = r#"{"result":{"count":7}}"#;
+        let (port, server) = spawn_server(format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{resp_body}",
+            resp_body.len()
+        ))
+        .await;
+        let req_body = r#"{"query":"status"}"#;
+        let cfg = ModuleConfig {
+            kind: "http".into(),
+            url: format!("http://127.0.0.1:{port}/api"),
+            http_method: "POST".into(),
+            http_headers: vec![
+                HttpHeader { name: "  ".into(), value: "ignored".into() },
+                HttpHeader { name: "x-api-key".into(), value: "secret-key-999".into() },
+            ],
+            http_body: req_body.into(),
+            json_path: "result.count".into(),
+            timeout_ms: 3000,
+            ..Default::default()
+        };
+        let r = fetch(&cfg).await.unwrap();
+        assert_eq!((r.text.as_str(), r.num), ("7", Some(7.0)));
+        let req = server.await.unwrap();
+        let lower = req.to_ascii_lowercase();
+        assert!(req.starts_with("POST /api HTTP/1.1"), "{req}");
+        assert!(lower.contains("x-api-key: secret-key-999\r\n"), "{req}");
+        assert!(lower.contains("content-type: application/json\r\n"), "{req}");
+        assert!(req.ends_with(req_body), "{req}");
+    }
+
+    #[tokio::test]
+    async fn missing_response_header_returns_clear_error() {
+        let (port, _server) =
+            spawn_server("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok").await;
+        let cfg = ModuleConfig {
+            kind: "http".into(),
+            url: format!("http://127.0.0.1:{port}/"),
+            http_response_header: "X-Missing-Header".into(),
+            timeout_ms: 3000,
+            ..Default::default()
+        };
+        let err = fetch(&cfg).await.unwrap_err();
+        assert!(err.contains("响应头缺少 X-Missing-Header"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn invalid_header_value_does_not_leak_secret() {
+        use crate::config::HttpHeader;
+        let cfg = ModuleConfig {
+            kind: "http".into(),
+            url: "http://127.0.0.1:1/unused".into(),
+            http_headers: vec![HttpHeader {
+                name: "Authorization".into(),
+                value: "Bearer super-secret-value\n".into(),
+            }],
+            ..Default::default()
+        };
+        let err = fetch(&cfg).await.unwrap_err();
+        assert!(err.contains("Authorization"), "{err}");
+        assert!(!err.contains("super-secret-value"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn no_proxy_client_reaches_local_server() {
+        let (port, _server) =
+            spawn_server("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n42").await;
+        let cfg = ModuleConfig {
+            kind: "http".into(),
+            url: format!("http://127.0.0.1:{port}/local"),
+            http_no_proxy: true,
+            timeout_ms: 3000,
+            ..Default::default()
+        };
+        let r = fetch(&cfg).await.unwrap();
+        assert_eq!((r.text.as_str(), r.num), ("42", Some(42.0)));
+    }
+
+    #[tokio::test]
+    async fn unsupported_method_returns_chinese_error() {
+        let cfg = ModuleConfig {
+            kind: "http".into(),
+            url: "http://127.0.0.1:1/unused".into(),
+            http_method: "DELETE".into(),
+            ..Default::default()
+        };
+        let err = fetch(&cfg).await.unwrap_err();
+        assert!(err.contains("不支持的请求方法：DELETE"), "{err}");
     }
 
     #[tokio::test]

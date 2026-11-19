@@ -75,18 +75,25 @@ impl Default for ClickAction {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct HttpHeader {
+    pub name: String,
+    pub value: String,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ModuleConfig {
     pub id: String,
-    /// command：运行命令；http：请求网址；ping：ICMP 延迟；gpu：所有显卡的占用率。后三种不经过 shell
+    /// command：运行命令；http：请求网址；ping：ICMP 延迟；tcp：TCP 端口探测；gpu：所有显卡的占用率。后四种不经过 shell
     #[serde(rename = "type")]
     pub kind: String,
     pub name: String,
     pub command: String,
     pub shell: String,
     pub interval_ms: u64,
-    /// command 轮询：执行超时；command 常驻：多久没有输出就判定卡死并重启；http / ping：请求超时
+    /// command 轮询：执行超时；command 常驻：多久没有输出就判定卡死并重启；http / ping / tcp：请求超时
     pub timeout_ms: u64,
     pub style: String,
     pub format: String,
@@ -96,8 +103,22 @@ pub struct ModuleConfig {
     pub url: String,
     /// http：JSON 字段路径（如 data.items[0].value）；留空则把响应正文当作文本
     pub json_path: String,
-    /// ping：主机名或 IPv4 地址
+    /// ping / tcp：主机名或 IP 地址
     pub host: String,
+    /// tcp：目标端口（1~65535）
+    pub port: u16,
+    /// http：请求方法（GET / HEAD / POST）
+    pub http_method: String,
+    /// http：自定义请求头
+    pub http_headers: Vec<HttpHeader>,
+    /// http：POST 请求体
+    pub http_body: String,
+    /// http：提取指定响应头的值（留空则读取响应正文）
+    pub http_response_header: String,
+    /// http：直连目标地址，绕过系统代理
+    pub http_no_proxy: bool,
+    /// http：跳过 TLS 证书校验（仅建议局域网自签名证书启用）
+    pub http_insecure: bool,
     /// command：只启动一次，每输出一行刷新一次
     pub persistent: bool,
     pub thresholds: Vec<Threshold>,
@@ -121,6 +142,13 @@ impl Default for ModuleConfig {
             url: String::new(),
             json_path: String::new(),
             host: String::new(),
+            port: 0,
+            http_method: "GET".into(),
+            http_headers: Vec::new(),
+            http_body: String::new(),
+            http_response_header: String::new(),
+            http_no_proxy: false,
+            http_insecure: false,
             persistent: false,
             thresholds: Vec::new(),
             click: None,

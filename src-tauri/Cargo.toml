@@ -27,7 +27,7 @@ sysinfo = "0.33"
 starship-battery = "0.10"
 encoding_rs = "0.8"
 # io-util：常驻进程模式按行读取子进程输出
-tokio = { version = "1", features = ["process", "time", "sync", "macros", "io-util"] }
+tokio = { version = "1", features = ["process", "time", "sync", "macros", "io-util", "net"] }
 # HTTP 模块：与 tauri-plugin-updater 使用同一套 reqwest + rustls(ring)，不引入额外依赖；
 # 加密提供者在首次使用时安装（见 modules/http.rs），证书校验走系统证书库，代理走系统代理设置
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "system-proxy"] }
