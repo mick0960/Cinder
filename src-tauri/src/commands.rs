@@ -2,7 +2,7 @@ use tauri::{AppHandle, Emitter, Manager, State, Window};
 use tauri_plugin_autostart::ManagerExt;
 
 use crate::burn;
-use crate::config::{self, AppState, DriverConfig, ModuleConfig, RunnerConfig};
+use crate::config::{self, runners::RunnerPayload, AppState, DriverConfig, ModuleConfig};
 use crate::memclean;
 use crate::menu;
 use crate::metrics;
@@ -142,11 +142,39 @@ pub fn set_driver(app: AppHandle, driver: DriverConfig) -> DriverConfig {
     applied
 }
 
+static RUNNERS_IO_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[tauri::command]
-pub fn save_runners(app: AppHandle, runners: Vec<RunnerConfig>) -> Result<(), String> {
-    config::set_runners(&app, runners.clone());
-    let current = app.state::<AppState>().0.read().unwrap().character.clone();
-    let _ = app.emit("config://runners", &runners);
+pub async fn get_runners(app: AppHandle) -> Vec<RunnerPayload> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = RUNNERS_IO_LOCK.lock().unwrap();
+        let runners = {
+            let state = app.state::<AppState>();
+            let cfg = state.0.read().unwrap();
+            cfg.runners.clone()
+        };
+        let dir = config::app_data_dir(&app);
+        config::runners::load_all(&dir, &runners)
+    })
+    .await
+    .unwrap_or_default()
+}
+
+#[tauri::command]
+pub async fn save_runners(app: AppHandle, runners: Vec<RunnerPayload>) -> Result<(), String> {
+    let handle = app.clone();
+    let (hydrated, current) = tauri::async_runtime::spawn_blocking(move || -> Result<_, String> {
+        let _guard = RUNNERS_IO_LOCK.lock().unwrap();
+        let dir = config::app_data_dir(&handle);
+        let (meta, hydrated) = config::runners::save_all(&dir, runners)?;
+        config::set_runners(&handle, meta);
+        let current = handle.state::<AppState>().0.read().unwrap().character.clone();
+        Ok((hydrated, current))
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
+    let _ = app.emit("config://runners", &hydrated);
     let _ = app.emit("character://changed", current);
     Ok(())
 }

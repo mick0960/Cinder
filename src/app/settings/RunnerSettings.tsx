@@ -62,10 +62,14 @@ export function RunnerSettings() {
   const [confirmDel, setConfirmDel] = createSignal(false);
   let fileInput!: HTMLInputElement;
 
-  invoke<AppConfig>("get_config").then((c) => {
-    setRunners(c.runners ?? []);
+  Promise.all([
+    invoke<RunnerConfig[]>("get_runners"),
+    invoke<AppConfig>("get_config"),
+  ]).then(([list, c]) => {
+    const items = list ?? [];
+    setRunners(items);
     setCurrent(c.character || "bonfire");
-    if (c.runners?.length) setSelected(c.runners[0].id);
+    if (items.length && !selected()) setSelected(items[0].id);
   });
 
   const persist = async (next: RunnerConfig[]) => {

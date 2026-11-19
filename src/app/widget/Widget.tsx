@@ -1,12 +1,13 @@
 import { createSignal, onCleanup } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { character, runners, idle, initStores, stepDriveLevel } from "./stores";
+import { character, runners, idle, initStores, loadRunners, stepDriveLevel } from "./stores";
 import "./panel.css";
 
 /** 悬浮图标窗口：固定 64×64、位置只由拖动改变；监控面板在独立的 panel 窗口里（见 PanelWindow.tsx） */
 export function Widget() {
   initStores();
+  loadRunners();
   const win = getCurrentWindow();
 
   let dragStart: { x: number; y: number } | null = null;

@@ -54,7 +54,6 @@ export function initStores() {
 
   invoke<AppConfig>("get_config").then((c) => {
     setModules(c.modules ?? []);
-    setRunners(c.runners ?? []);
     if (c.character) setCharacter(c.character);
     setDriver(c.driver ?? DEFAULT_DRIVER);
   });
@@ -100,14 +99,21 @@ export function initStores() {
     setModuleHistory(keep);
   });
 
-  listen<RunnerConfig[]>("config://runners", (e) => setRunners(e.payload ?? []));
-
   listen<string>("character://changed", (e) => setCharacter(e.payload));
 
   invoke<boolean>("is_idle").then(setIdle);
   listen<boolean>("idle://changed", (e) => setIdle(e.payload));
 
   listen<DriverConfig>("config://driver", (e) => setDriver(e.payload ?? DEFAULT_DRIVER));
+}
+
+let runnersStarted = false;
+/** 仅悬浮图标窗口需要加载自定义角色帧，避免面板与设置页拉取图片数据 */
+export function loadRunners() {
+  if (runnersStarted) return;
+  runnersStarted = true;
+  invoke<RunnerConfig[]>("get_runners").then((list) => setRunners(list ?? []));
+  listen<RunnerConfig[]>("config://runners", (e) => setRunners(e.payload ?? []));
 }
 
 export { metrics, metricHistory, moduleOutputs, moduleHistory, modules, character, runners, driver, idle };
