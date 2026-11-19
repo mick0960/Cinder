@@ -5,6 +5,7 @@ import { exportModules, parseImport, type ImportedModule } from "./share";
 import { newId, TYPE_LABEL, targetOf } from "./moduleModel";
 
 const COPIED_MS = 1800;
+const SENSITIVE_HEADER_RE = /auth|key|token|cookie|secret/i;
 
 async function copyText(text: string, fallback: HTMLTextAreaElement | undefined): Promise<boolean> {
   try {
@@ -32,6 +33,15 @@ function badges(m: ModuleConfig): string[] {
   return b;
 }
 
+function httpSummary(m: ModuleConfig): string {
+  if (m.type !== "http") return "";
+  const parts: string[] = [];
+  if (m.httpHeaders?.length) parts.push(`${m.httpHeaders.length} 个请求头`);
+  if (m.httpMethod === "POST" && m.httpBody) parts.push(`请求体 ${m.httpBody.length} 字符`);
+  if (m.httpNoProxy) parts.push("直连（绕过系统代理）");
+  return parts.join(" · ");
+}
+
 type Tab = "export" | "import";
 
 /** 导出（复制成文本分享）与导入。导入的内容先逐条列出来，由用户确认后才加入列表，且仍需“保存并生效” */
@@ -45,7 +55,13 @@ export function ShareDialog(props: {
 
   /* ---------- 导出 ---------- */
   const [scope, setScope] = createSignal<"one" | "all">(props.selected ? "one" : "all");
-  const exported = createMemo(() => exportModules(scope() === "one" && props.selected ? [props.selected] : props.modules));
+  const exportedMods = createMemo(() => (scope() === "one" && props.selected ? [props.selected] : props.modules));
+  const exported = createMemo(() => exportModules(exportedMods()));
+  const hasSensitiveHeaders = createMemo(() =>
+    exportedMods().some(
+      (m) => m.type === "http" && (m.httpHeaders ?? []).some((h) => h.name.trim() && SENSITIVE_HEADER_RE.test(h.name)),
+    ),
+  );
   const [copied, setCopied] = createSignal<boolean | null>(null);
   let copyTimer = 0;
   onCleanup(() => clearTimeout(copyTimer));
@@ -106,9 +122,14 @@ export function ShareDialog(props: {
               value={exported()}
               onFocus={(e) => e.currentTarget.select()}
             />
+            <Show when={hasSensitiveHeaders()}>
+              <div class="imp-warn strong">
+                <b>注意敏感请求头</b>：当前导出内容包含可能含凭据的请求头（Authorization / Key / Token / Cookie / Secret），分享前请检查并脱敏。
+              </div>
+            </Show>
             <div class="help">
               把这段文本发给别人，对方在“导入”里粘贴即可。导出的只有模块配置本身（含尚未保存的修改）；
-              如果命令或网址里写了密钥、令牌，它们也会被一并导出，分享前请先检查。
+              如果命令、网址或请求头里写了密钥、令牌，它们也会被一并导出，分享前请先检查。
             </div>
             <div class="btnrow">
               <button type="button" class="primary" onClick={copy}>
@@ -182,6 +203,10 @@ function ImportCard(props: { it: ImportedModule; on: boolean; onToggle: () => vo
         <For each={badges(m())}>{(b) => <span class="tpl-tag">{b}</span>}</For>
       </label>
       <pre class="imp-target">{targetOf(m())}</pre>
+      <Show when={httpSummary(m())}>{(s) => <div class="imp-line">HTTP 选项：{s()}</div>}</Show>
+      <Show when={m().type === "http" && m().httpInsecure}>
+        <div class="imp-note">⚠ 跳过 TLS 证书校验（不验证 HTTPS 证书）</div>
+      </Show>
       <Show when={m().click}>{(c) => <div class="imp-line">点击时：{describeClick(c())}</div>}</Show>
       <Show when={m().thresholds.length}>
         <div class="imp-line">阈值着色：{m().thresholds.length} 条规则</div>

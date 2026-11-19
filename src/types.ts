@@ -52,8 +52,14 @@ export interface ModuleItem {
   color: string | null;
 }
 
-export type ModuleType = "command" | "http" | "ping" | "gpu";
+export type ModuleType = "command" | "http" | "ping" | "tcp" | "gpu";
+export type HttpMethod = "GET" | "HEAD" | "POST";
 export type Shell = "powershell" | "pwsh" | "cmd" | "direct";
+
+export interface HttpHeader {
+  name: string;
+  value: string;
+}
 
 /** 数值阈值着色：数值高于 / 低于 value 时用 color */
 export interface ThresholdRule {
@@ -71,13 +77,13 @@ export interface ClickAction {
 
 export interface ModuleConfig {
   id: string;
-  /** command：运行命令；http：请求网址取 JSON 字段；ping：ICMP 延迟；gpu：所有显卡的占用率。后三种不经过 shell */
+  /** command：运行命令；http：请求网址；ping：ICMP 延迟；tcp：TCP 端口探测；gpu：所有显卡的占用率。后四种不经过 shell */
   type: ModuleType;
   name: string;
   command: string;
   shell: Shell;
   intervalMs: number;
-  /** command 轮询：执行超时；command 常驻：多久没有输出就判定卡死并重启；http / ping：请求超时 */
+  /** command 轮询：执行超时；command 常驻：多久没有输出就判定卡死并重启；http / ping / tcp：请求或连接超时 */
   timeoutMs: number;
   style: "text" | "progress" | "sparkline";
   format: "plain" | "json";
@@ -85,10 +91,24 @@ export interface ModuleConfig {
   unit: string | null;
   /** http：请求地址 */
   url: string;
-  /** http：JSON 字段路径（如 data.items[0].value）；留空则把响应正文当作文本 */
+  /** http：JSON 字段路径（如 data.items[0].value）；留空则把响应正文或响应头当作文本 */
   jsonPath: string;
-  /** ping：主机名或 IPv4 地址 */
+  /** http：请求方法 */
+  httpMethod: HttpMethod;
+  /** http：自定义请求头 */
+  httpHeaders: HttpHeader[];
+  /** http：POST 请求体 */
+  httpBody: string;
+  /** http：从指定响应头取值（留空则读取响应正文） */
+  httpResponseHeader: string;
+  /** http：直连（绕过系统代理） */
+  httpNoProxy: boolean;
+  /** http：跳过 TLS 证书校验 */
+  httpInsecure: boolean;
+  /** ping / tcp：主机名或 IP 地址 */
   host: string;
+  /** tcp：目标端口（1~65535） */
+  port: number;
   /** command：只启动一次，每输出一行刷新一次 */
   persistent: boolean;
   thresholds: ThresholdRule[];
