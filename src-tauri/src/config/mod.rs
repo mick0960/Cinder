@@ -392,6 +392,7 @@ pub fn set_hide_on_fullscreen(app: &AppHandle, enabled: bool) {
         cfg.clone()
     };
     save(app, &snapshot);
+    crate::fullscreen::wake();
 }
 
 pub fn set_edge_hide(app: &AppHandle, enabled: bool) {
@@ -402,6 +403,7 @@ pub fn set_edge_hide(app: &AppHandle, enabled: bool) {
         cfg.clone()
     };
     save(app, &snapshot);
+    crate::dock::wake();
 }
 
 pub fn set_idle_ember_minutes(app: &AppHandle, minutes: u32) {
@@ -412,6 +414,7 @@ pub fn set_idle_ember_minutes(app: &AppHandle, minutes: u32) {
         cfg.clone()
     };
     save(app, &snapshot);
+    crate::idle::wake();
 }
 
 pub fn save_if_dirty(app: &AppHandle) {

@@ -4,6 +4,7 @@
 //! 涵盖全屏应用、D3D 独占全屏、演示模式和全屏的商店应用。
 //! 该状态是全局的，不区分显示器：副屏上有全屏程序时，主屏的篝火也会隐藏。
 
+use std::sync::{Condvar, Mutex, OnceLock};
 use std::time::Duration;
 
 use tauri::{AppHandle, Manager};
@@ -16,6 +17,19 @@ use crate::config;
 use crate::widget;
 
 const POLL: Duration = Duration::from_secs(1);
+
+static WAKE: OnceLock<(Mutex<u64>, Condvar)> = OnceLock::new();
+
+fn wake_signal() -> &'static (Mutex<u64>, Condvar) {
+    WAKE.get_or_init(|| (Mutex::new(0), Condvar::new()))
+}
+
+pub fn wake() {
+    let (lock, cv) = wake_signal();
+    let mut seq = lock.lock().unwrap();
+    *seq = seq.wrapping_add(1);
+    cv.notify_all();
+}
 
 fn is_fullscreen() -> bool {
     let mut state: QUERY_USER_NOTIFICATION_STATE = 0;
@@ -32,9 +46,18 @@ pub fn start(app: AppHandle) {
     std::thread::spawn(move || {
         let mut was = false;
         loop {
+            let seen = *wake_signal().0.lock().unwrap();
             let enabled = app.state::<config::AppState>().0.read().unwrap().hide_on_fullscreen;
-            // 关闭选项等同于“全屏结束”，已被自动隐藏的图标会随之恢复
-            let now = enabled && is_fullscreen();
+            if !enabled {
+                // 关闭选项等同于“全屏结束”，已被自动隐藏的图标会随之恢复
+                was = false;
+                widget::restore_after_fullscreen(&app);
+                let (lock, cv) = wake_signal();
+                let guard = lock.lock().unwrap();
+                drop(cv.wait_while(guard, |s| *s == seen).unwrap());
+                continue;
+            }
+            let now = is_fullscreen();
             if now != was {
                 was = now;
                 if now {
@@ -43,7 +66,9 @@ pub fn start(app: AppHandle) {
                     widget::restore_after_fullscreen(&app);
                 }
             }
-            std::thread::sleep(POLL);
+            let (lock, cv) = wake_signal();
+            let guard = lock.lock().unwrap();
+            drop(cv.wait_timeout_while(guard, POLL, |s| *s == seen).unwrap());
         }
     });
 }

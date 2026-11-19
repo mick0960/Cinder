@@ -8,7 +8,7 @@
 //! 缩进去的那一半不一定在屏幕外：与别的显示器相邻的边上，它会落到隔壁屏幕里。
 //! 所以每次移动都用窗口区域（SetWindowRgn）把窗口裁剪到所在显示器内，裁掉的部分既看不见也点不到。
 
-use std::sync::Mutex;
+use std::sync::{Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Manager};
@@ -24,7 +24,21 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 
 use crate::{config, metrics, widget};
 
-const POLL: Duration = Duration::from_millis(50);
+const POLL_FAST: Duration = Duration::from_millis(50);
+const POLL_IDLE: Duration = Duration::from_millis(150);
+
+static WAKE: OnceLock<(Mutex<u64>, Condvar)> = OnceLock::new();
+
+fn wake_signal() -> &'static (Mutex<u64>, Condvar) {
+    WAKE.get_or_init(|| (Mutex::new(0), Condvar::new()))
+}
+
+pub fn wake() {
+    let (lock, cv) = wake_signal();
+    let mut seq = lock.lock().unwrap();
+    *seq = seq.wrapping_add(1);
+    cv.notify_all();
+}
 /// 距屏幕边缘多近算“贴边”（物理像素）
 const SNAP: i32 = 16;
 /// 位置稳定多久才停靠：拖动过程中路过边缘不算
@@ -133,11 +147,6 @@ fn apply_clip(hwnd: isize, next: Option<(i32, i32, i32, i32)>) {
     }
 }
 
-/// 把窗口裁剪到显示器矩形内（窗口左上角在 x, y，大小 w × h）；完全在内部时取消裁剪
-fn clip(hwnd: isize, x: i32, y: i32, w: i32, h: i32, mon: &RECT) {
-    apply_clip(hwnd, calc_clip_rect(x, y, w, h, mon));
-}
-
 fn unclip(hwnd: isize) {
     apply_clip(hwnd, None);
 }
@@ -210,6 +219,89 @@ fn near(p: POINT, x: i32, y: i32, w: i32, h: i32, margin: i32) -> bool {
     p.x >= x - margin && p.x < x + w + margin && p.y >= y - margin && p.y < y + h + margin
 }
 
+fn widget_hwnd(app: &AppHandle) -> Option<isize> {
+    let win = app.get_webview_window(widget::WIDGET_LABEL)?;
+    let hwnd = win.hwnd().ok()?;
+    Some(hwnd.0 as isize)
+}
+
+fn step_active(
+    app: &AppHandle,
+    docked: &mut Option<Docked>,
+    last_pos: &mut Option<(i32, i32)>,
+    stable_since: &mut Instant,
+    left_at: &mut Option<Instant>,
+) -> Duration {
+    let Some(hwnd) = widget_hwnd(app) else {
+        return if docked.is_some() { POLL_FAST } else { POLL_IDLE };
+    };
+    let Some(r) = window_rect(hwnd) else {
+        return if docked.is_some() { POLL_FAST } else { POLL_IDLE };
+    };
+    let (w, h) = (r.right - r.left, r.bottom - r.top);
+
+    if let Some(mut d) = *docked {
+        // 位置和预期不符：用户把它拖走了
+        let expected = d.pos(w, h);
+        if (r.left - expected.0).abs() > 2 || (r.top - expected.1).abs() > 2 {
+            // 彻底取消裁剪：拖动中的图标可能已经到了别的显示器，不能再按原显示器裁
+            unclip(hwnd);
+            *docked = None;
+            set_home(None);
+            *last_pos = None;
+            return POLL_FAST;
+        }
+        if let Some(c) = cursor() {
+            if near(c, expected.0, expected.1, w, h, 0) {
+                *left_at = None;
+                if !d.peeked {
+                    animate(hwnd, expected, d.home, &d.mon);
+                    d.peeked = true;
+                    *docked = Some(d);
+                }
+            } else if d.peeked {
+                let busy = metrics::panel_open()
+                    || button_down()
+                    || near(c, d.home.0, d.home.1, w, h, LEAVE_MARGIN);
+                if busy {
+                    *left_at = None;
+                } else if left_at.get_or_insert_with(Instant::now).elapsed() >= LEAVE_DELAY {
+                    animate(hwnd, d.home, d.hidden_pos(w, h), &d.mon);
+                    d.peeked = false;
+                    *docked = Some(d);
+                    *left_at = None;
+                }
+            }
+        }
+        return POLL_FAST;
+    }
+
+    // 未停靠：等位置稳定下来再判断是否贴边
+    if button_down() {
+        *last_pos = None;
+        return POLL_FAST;
+    }
+    if *last_pos != Some((r.left, r.top)) {
+        *last_pos = Some((r.left, r.top));
+        *stable_since = Instant::now();
+        return POLL_FAST;
+    }
+    if stable_since.elapsed() < SETTLE {
+        return POLL_FAST;
+    }
+    if let Some(m) = monitor_rect(hwnd) {
+        if let Some(d) = snap_target(&r, &m) {
+            // 先贴齐边缘并记下位置；缩进去由上面的“已停靠”分支在鼠标离开后完成
+            animate(hwnd, (r.left, r.top), d.home, &d.mon);
+            set_home(Some(d.home));
+            *docked = Some(d);
+            *left_at = None;
+            return POLL_FAST;
+        }
+    }
+    POLL_IDLE
+}
+
 pub fn start(app: AppHandle) {
     std::thread::spawn(move || {
         let mut docked: Option<Docked> = None;
@@ -218,81 +310,51 @@ pub fn start(app: AppHandle) {
         let mut left_at: Option<Instant> = None;
 
         loop {
-            std::thread::sleep(POLL);
+            let seen = *wake_signal().0.lock().unwrap();
             let enabled = app.state::<config::AppState>().0.read().unwrap().edge_hide;
-            let Some(win) = app.get_webview_window(widget::WIDGET_LABEL) else { continue };
-            let Ok(hwnd) = win.hwnd() else { continue };
-            let hwnd = hwnd.0 as isize;
-            let Some(r) = window_rect(hwnd) else { continue };
-            let (w, h) = (r.right - r.left, r.bottom - r.top);
 
-            if let Some(mut d) = docked {
-                // 关闭选项：探出来并取消停靠
-                if !enabled {
-                    if !d.peeked {
-                        animate(hwnd, (r.left, r.top), d.home, &d.mon);
+            if !enabled {
+                // 关闭选项：探出来并取消停靠、解除裁剪，再休眠等待唤醒
+                if let Some(d) = docked.take() {
+                    if let Some(hwnd) = widget_hwnd(&app) {
+                        if let Some(r) = window_rect(hwnd) {
+                            if !d.peeked {
+                                animate(hwnd, (r.left, r.top), d.home, &d.mon);
+                            }
+                        }
+                        unclip(hwnd);
                     }
-                    clip(hwnd, d.home.0, d.home.1, w, h, &d.mon);
-                    docked = None;
                     set_home(None);
-                    last_pos = None;
-                    continue;
                 }
-                // 位置和预期不符：用户把它拖走了
-                let expected = d.pos(w, h);
-                if (r.left - expected.0).abs() > 2 || (r.top - expected.1).abs() > 2 {
-                    // 彻底取消裁剪：拖动中的图标可能已经到了别的显示器，不能再按原显示器裁
-                    unclip(hwnd);
-                    docked = None;
-                    set_home(None);
-                    last_pos = None;
-                    continue;
-                }
-                let Some(c) = cursor() else { continue };
-                if near(c, expected.0, expected.1, w, h, 0) {
-                    left_at = None;
-                    if !d.peeked {
-                        animate(hwnd, expected, d.home, &d.mon);
-                        d.peeked = true;
-                        docked = Some(d);
-                    }
-                } else if d.peeked {
-                    let busy = metrics::panel_open()
-                        || button_down()
-                        || near(c, d.home.0, d.home.1, w, h, LEAVE_MARGIN);
-                    if busy {
-                        left_at = None;
-                    } else if left_at.get_or_insert_with(Instant::now).elapsed() >= LEAVE_DELAY {
-                        animate(hwnd, d.home, d.hidden_pos(w, h), &d.mon);
-                        d.peeked = false;
-                        docked = Some(d);
-                        left_at = None;
-                    }
-                }
-                continue;
-            }
-
-            // 未停靠：等位置稳定下来再判断是否贴边
-            if !enabled || !widget::is_shown() || button_down() {
                 last_pos = None;
-                continue;
-            }
-            if last_pos != Some((r.left, r.top)) {
-                last_pos = Some((r.left, r.top));
-                stable_since = Instant::now();
-                continue;
-            }
-            if stable_since.elapsed() < SETTLE {
-                continue;
-            }
-            let Some(m) = monitor_rect(hwnd) else { continue };
-            if let Some(d) = snap_target(&r, &m) {
-                // 先贴齐边缘并记下位置；缩进去由上面的“已停靠”分支在鼠标离开后完成
-                animate(hwnd, (r.left, r.top), d.home, &d.mon);
-                set_home(Some(d.home));
-                docked = Some(d);
                 left_at = None;
+                let (lock, cv) = wake_signal();
+                let guard = lock.lock().unwrap();
+                drop(cv.wait_while(guard, |s| *s == seen).unwrap());
+                continue;
             }
+
+            if !widget::is_shown() {
+                if docked.is_none() {
+                    last_pos = None;
+                }
+                left_at = None;
+                let (lock, cv) = wake_signal();
+                let guard = lock.lock().unwrap();
+                drop(cv.wait_while(guard, |s| *s == seen).unwrap());
+                continue;
+            }
+
+            let wait = step_active(
+                &app,
+                &mut docked,
+                &mut last_pos,
+                &mut stable_since,
+                &mut left_at,
+            );
+            let (lock, cv) = wake_signal();
+            let guard = lock.lock().unwrap();
+            drop(cv.wait_timeout_while(guard, wait, |s| *s == seen).unwrap());
         }
     });
 }

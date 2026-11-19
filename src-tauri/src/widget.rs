@@ -76,6 +76,8 @@ fn hide_window(app: &AppHandle) {
     }
     SHOWN.store(false, Ordering::Relaxed);
     crate::modules::wake();
+    crate::metrics::wake();
+    crate::dock::wake();
 }
 
 fn raise(app: &AppHandle) {
@@ -91,6 +93,8 @@ fn raise(app: &AppHandle) {
     let _ = win.show();
     SHOWN.store(true, Ordering::Relaxed);
     crate::modules::wake();
+    crate::metrics::wake();
+    crate::dock::wake();
     // 取消置顶后图标和普通窗口同层，show() 不会改变 z 序，得显式提到最上面
     let Ok(hwnd) = win.hwnd() else {
         return;

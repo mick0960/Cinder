@@ -1,17 +1,32 @@
+mod net;
+
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
-use sysinfo::{Disks, Networks, System};
+use sysinfo::{Disks, System};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::config;
 
 static PANEL_OPEN: AtomicBool = AtomicBool::new(false);
-static EMIT_MS: AtomicU64 = AtomicU64::new(1000);
+static EMIT_MS: AtomicU64 = AtomicU64::new(2000);
+static WAKE: OnceLock<(Mutex<u64>, Condvar)> = OnceLock::new();
 
 // 与 Windows 任务管理器 / 资源管理器一致，使用二进制单位
 const MIB: f64 = 1024.0 * 1024.0;
 const GIB: f64 = 1024.0 * 1024.0 * 1024.0;
+
+fn wake_signal() -> &'static (Mutex<u64>, Condvar) {
+    WAKE.get_or_init(|| (Mutex::new(0), Condvar::new()))
+}
+
+pub fn wake() {
+    let (lock, cv) = wake_signal();
+    let mut seq = lock.lock().unwrap();
+    *seq = seq.wrapping_add(1);
+    cv.notify_all();
+}
 
 #[derive(Serialize, Clone, Debug)]
 pub struct DiskInfo {
@@ -53,48 +68,58 @@ pub fn set_panel_open(app: &AppHandle, open: bool) {
     };
     PANEL_OPEN.store(open, Ordering::Relaxed);
     EMIT_MS.store(
-        if open { panel_ms.max(1000) } else { idle_ms.max(2000) },
+        if open {
+            panel_ms.clamp(250, 60_000)
+        } else {
+            idle_ms.clamp(500, 60_000)
+        },
         Ordering::Relaxed,
     );
+    wake();
     // 展开：模块立即刷新；收起：常驻进程开始计时，到期后结束
     crate::modules::wake();
 }
 
 pub fn start(app: AppHandle) {
+    let (panel_ms, idle_ms) = {
+        let state = app.state::<config::AppState>();
+        let cfg = state.0.read().unwrap();
+        (cfg.metrics.panel_interval_ms, cfg.metrics.idle_interval_ms)
+    };
+    EMIT_MS.store(
+        if panel_open() {
+            panel_ms.clamp(250, 60_000)
+        } else {
+            idle_ms.clamp(500, 60_000)
+        },
+        Ordering::Relaxed,
+    );
+
     std::thread::spawn(move || {
         let mut sys = System::new();
-        let mut nets = Networks::new_with_refreshed_list();
+        let mut net = net::NetSampler::new();
         let mut disks = Disks::new_with_refreshed_list();
         let battery_mgr = starship_battery::Manager::new().ok();
 
-        let mut last_net: Option<(u64, u64, Instant)> = None;
         let mut cached_disks: Vec<DiskInfo> = Vec::new();
         let mut cached_battery: Option<BatteryInfo> = None;
         let mut last_slow: Option<Instant> = None;
 
         loop {
+            let seen = *wake_signal().0.lock().unwrap();
             let now = Instant::now();
+            let shown = crate::widget::is_shown();
+            let open = panel_open();
+            let active = shown || open;
 
             sys.refresh_cpu_usage();
             sys.refresh_memory();
-            nets.refresh(true);
+            let (up, down) = net.sample();
 
-            let (recv, sent): (u64, u64) = nets
-                .iter()
-                .fold((0, 0), |(r, t), (_, d)| (r + d.received(), t + d.transmitted()));
-
-            let (up, down) = match last_net {
-                Some((r, s, t)) if now > t => {
-                    let dt = (now - t).as_secs_f64();
-                    let up = sent.saturating_sub(s) as f64 / dt;
-                    let down = recv.saturating_sub(r) as f64 / dt;
-                    (up as u64, down as u64)
-                }
-                _ => (0, 0),
-            };
-            last_net = Some((recv, sent, now));
-
-            if last_slow.is_none() || now - last_slow.unwrap() >= Duration::from_secs(30) {
+            if active
+                && (last_slow.is_none()
+                    || (open && now.duration_since(last_slow.unwrap()) >= Duration::from_secs(30)))
+            {
                 disks.refresh(true);
                 cached_disks = disks
                     .list()
@@ -115,18 +140,29 @@ pub fn start(app: AppHandle) {
                     .and_then(|m| m.batteries().ok())
                     .and_then(|mut it| it.next())
                     .and_then(|b| b.ok())
-                    .map(|b| BatteryInfo {
-                        percent: b.state_of_charge().get::<starship_battery::units::ratio::ratio>() as f64,
-                        charging: b.state() == starship_battery::State::Charging,
-                        secs_left: b
-                            .time_to_empty()
-                            .map(|d| d.get::<starship_battery::units::time::second>() as u64),
+                    .map(|b| {
+                        let charging = b.state() == starship_battery::State::Charging;
+                        let time = if charging {
+                            b.time_to_full()
+                        } else {
+                            b.time_to_empty()
+                        };
+                        BatteryInfo {
+                            percent: b
+                                .state_of_charge()
+                                .get::<starship_battery::units::ratio::ratio>()
+                                as f64,
+                            charging,
+                            secs_left: time.map(|d| {
+                                d.get::<starship_battery::units::time::second>().max(0.0) as u64
+                            }),
+                        }
                     });
                 last_slow = Some(now);
             }
 
             // 篝火被隐藏（如全屏游戏期间）时不采样，GPU 采样线程会在闲置后自行退出
-            let gpu_percent = if config::driver_source(&app) == "gpu" && crate::widget::is_shown() {
+            let gpu_percent = if active && shown && config::driver_source(&app) == "gpu" {
                 crate::gpu::percent().ok().flatten()
             } else {
                 None
@@ -151,8 +187,14 @@ pub fn start(app: AppHandle) {
 
             config::save_if_dirty(&app);
 
-            let ms = EMIT_MS.load(Ordering::Relaxed).max(1000);
-            std::thread::sleep(Duration::from_millis(ms));
+            let wait = if active {
+                Duration::from_millis(EMIT_MS.load(Ordering::Relaxed).clamp(250, 60_000))
+            } else {
+                Duration::from_secs(5)
+            };
+            let (lock, cv) = wake_signal();
+            let guard = lock.lock().unwrap();
+            drop(cv.wait_timeout_while(guard, wait, |s| *s == seen).unwrap());
         }
     });
 }

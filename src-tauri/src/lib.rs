@@ -64,7 +64,10 @@ pub fn run() {
 
             // 全局菜单事件：右键菜单和托盘菜单共用 settings / exit
             app.on_menu_event(|app, event| match event.id().as_ref() {
-                "exit" => app.exit(0),
+                "exit" => {
+                    config::save_if_dirty(app);
+                    app.exit(0);
+                }
                 "settings" => {
                     let _ = menu::open_settings(app);
                 }
@@ -93,6 +96,7 @@ pub fn run() {
                 // 贴边缩进去时保存探出来的位置，而不是屏幕外的坐标
                 let (x, y) = dock::docked_home().unwrap_or((p.x, p.y));
                 config::set_window_pos(window.app_handle(), x, y);
+                dock::wake();
                 // 面板窗口跟随图标
                 if metrics::panel_open() {
                     let _ = window.app_handle().emit_to("panel", "panel://anchor-moved", ());
