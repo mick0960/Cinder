@@ -5,6 +5,7 @@ mod job;
 mod ping;
 pub mod runner;
 mod stream;
+mod tcp;
 mod value;
 
 use serde::{Deserialize, Serialize};
@@ -36,7 +37,7 @@ pub fn wake() {
     wake_signal().notify_waiters();
 }
 
-/// 原生模块（http / ping / gpu）一次取值的结果：显示文本，以及自然单位下的数值（毫秒、百分比等）
+/// 原生模块（http / ping / tcp / gpu）一次取值的结果：显示文本，以及自然单位下的数值（毫秒、百分比等）
 #[derive(Debug)]
 pub struct Reading {
     pub text: String,
@@ -81,11 +82,18 @@ struct JsonOut {
 
 pub fn start(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
-        let mut spawned = GEN.load(Ordering::Relaxed);
+        let mut spawned = GEN.load(Ordering::Acquire);
         spawn_all(&app, spawned);
         loop {
-            tokio::time::sleep(Duration::from_millis(500)).await;
-            let cur = GEN.load(Ordering::Relaxed);
+            let notified = wake_signal().notified();
+            let cur = GEN.load(Ordering::Acquire);
+            if cur != spawned {
+                spawn_all(&app, cur);
+                spawned = cur;
+                continue;
+            }
+            notified.await;
+            let cur = GEN.load(Ordering::Acquire);
             if cur != spawned {
                 spawn_all(&app, cur);
                 spawned = cur;
@@ -95,7 +103,7 @@ pub fn start(app: AppHandle) {
 }
 
 pub fn reload(_app: &AppHandle) {
-    GEN.fetch_add(1, Ordering::Relaxed);
+    GEN.fetch_add(1, Ordering::Release);
     wake();
 }
 
@@ -110,6 +118,7 @@ fn spawn_all(app: &AppHandle, gen: u64) {
             "command" => !m.command.trim().is_empty(),
             "http" => !m.url.trim().is_empty(),
             "ping" => !m.host.trim().is_empty(),
+            "tcp" => !m.host.trim().is_empty() && m.port > 0,
             "gpu" => true,
             _ => false,
         };
@@ -147,7 +156,7 @@ fn emit(app: &AppHandle, out: &ModuleOutput) {
     let _ = app.emit_to("widget", "module://output", out);
 }
 
-/// 轮询模块（命令 / HTTP / Ping / GPU）：按刷新间隔取值，面板收起时暂停
+/// 轮询模块（命令 / HTTP / Ping / TCP / GPU）：按刷新间隔取值，面板收起时暂停
 async fn run_loop(app: AppHandle, cfg: ModuleConfig, gen: u64) {
     // 请求外部服务的模块不允许过于频繁
     let min_ms = if cfg.kind == "http" { 1000 } else { 500 };
@@ -298,6 +307,7 @@ async fn fetch(cfg: &ModuleConfig) -> Result<ModuleOutput, String> {
         "command" => runner::run_command(cfg).await.map(|raw| parse_output(cfg, raw)),
         "http" => http::fetch(cfg).await.map(|r| reading_output(cfg, r)),
         "ping" => ping::fetch(cfg).await.map(|r| reading_output(cfg, r)),
+        "tcp" => tcp::fetch(cfg).await.map(|r| reading_output(cfg, r)),
         "gpu" => fetch_gpu(cfg).await.map(|r| reading_output(cfg, r)),
         other => Err(format!("未知的模块类型: {other}")),
     }
@@ -490,6 +500,13 @@ mod tests {
         let old = r#"{"id":"m1","type":"command","name":"x","command":"echo 1","shell":"powershell","intervalMs":5000,"timeoutMs":3000,"style":"text","format":"plain","color":null,"unit":null}"#;
         let m: ModuleConfig = serde_json::from_str(old).unwrap();
         assert!(!m.persistent && m.thresholds.is_empty() && m.click.is_none() && m.url.is_empty());
+        assert_eq!(m.http_method, "GET");
+        assert_eq!(m.port, 0);
+        assert!(!m.http_no_proxy);
+        assert!(!m.http_insecure);
+        assert!(m.http_headers.is_empty());
+        assert!(m.http_body.is_empty());
+        assert!(m.http_response_header.is_empty());
         let cfg: crate::config::AppConfig = serde_json::from_str(r#"{"modules":[{"id":"a"}]}"#).unwrap();
         assert_eq!(cfg.driver.source, "cpu");
         assert_eq!(cfg.modules[0].kind, "command");
