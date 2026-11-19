@@ -114,6 +114,7 @@ pub fn run() {
             commands::save_modules,
             commands::module_click,
             commands::set_driver,
+            commands::get_runners,
             commands::save_runners,
             commands::set_character,
             commands::test_module,

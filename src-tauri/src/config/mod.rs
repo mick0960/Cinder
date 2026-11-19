@@ -1,3 +1,5 @@
+pub mod runners;
+
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -185,12 +187,16 @@ impl Default for UpdateConfig {
     }
 }
 
-/// 自定义角色（runner）：一组按顺序循环播放的图片帧（data URL）
+/// 自定义角色（runner）：元数据存于 config.json，图片帧文件存于 `<app_data_dir>/runners/<id>/`
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(default, rename_all = "camelCase")]
 pub struct RunnerConfig {
     pub id: String,
     pub name: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub frame_files: Vec<String>,
+    /// 仅用于从旧版 config.json 自动一次性迁移；迁移后会清空，不再写入磁盘
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub frames: Vec<String>,
 }
 
@@ -232,11 +238,14 @@ impl Default for AppConfig {
 
 pub struct AppState(pub std::sync::RwLock<AppConfig>);
 
-fn config_path(app: &AppHandle) -> PathBuf {
+pub fn app_data_dir(app: &AppHandle) -> PathBuf {
     app.path()
         .app_data_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
-        .join("config.json")
+}
+
+fn config_path(app: &AppHandle) -> PathBuf {
+    app_data_dir(app).join("config.json")
 }
 
 pub fn load_or_default(app: &AppHandle) -> AppConfig {
@@ -262,6 +271,10 @@ pub fn load_or_default(app: &AppHandle) -> AppConfig {
                     }
                     // 配置文件可能被手工编辑过
                     cfg.driver = cfg.driver.clone().sanitized();
+                    let dir = app_data_dir(app);
+                    if runners::migrate_if_needed(&dir, &mut cfg) {
+                        save(app, &cfg);
+                    }
                     cfg
                 }
                 Err(_) => {
@@ -345,7 +358,10 @@ pub fn driver_source(app: &AppHandle) -> String {
     source
 }
 
-pub fn set_runners(app: &AppHandle, runners: Vec<RunnerConfig>) {
+pub fn set_runners(app: &AppHandle, mut runners: Vec<RunnerConfig>) {
+    for r in &mut runners {
+        r.frames.clear();
+    }
     let snapshot = {
         let state = app.state::<AppState>();
         let mut cfg = state.0.write().unwrap();

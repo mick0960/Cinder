@@ -26,6 +26,7 @@ export function PanelWindow() {
   const [open, setOpen] = createSignal(false);
   const [flipX, setFlipX] = createSignal(false);
   const [flipY, setFlipY] = createSignal(false);
+  const [maxH, setMaxH] = createSignal<number | undefined>(undefined);
   let panelH = 0;
   let shown = false;
 
@@ -41,18 +42,29 @@ export function PanelWindow() {
     const cat = Math.round(CAT * sf);
     const mon = await monitorFromPoint(pos.x + cat / 2, pos.y + cat / 2);
     const pw = Math.round(WIN_W * sf);
-    const ph = Math.round((GAP + panelH + SHADOW) * sf);
     const area = mon ? (mon.workArea ?? { position: mon.position, size: mon.size }) : null;
+    const availBelow = area ? area.position.y + area.size.height - (pos.y + cat) : Infinity;
+    const availAbove = area ? pos.y - area.position.y : Infinity;
+    const desiredPh = Math.round((GAP + panelH + SHADOW) * sf);
     const fx = !!area && pos.x + pw > area.position.x + area.size.width;
-    const fy = !!area && pos.y + cat + ph > area.position.y + area.size.height;
+    const fy = !!area && desiredPh > availBelow && availAbove > availBelow;
+    const maxWinH = area
+      ? Math.max(Math.round(160 * sf), Math.floor(fy ? availAbove : availBelow))
+      : desiredPh;
+    const ph = Math.min(desiredPh, maxWinH);
+    const maxPanelCssH = Math.max(120, Math.floor(ph / sf - GAP - SHADOW));
+    setMaxH(ph < desiredPh ? maxPanelCssH : undefined);
     setFlipX(fx);
     setFlipY(fy);
-    await invoke("set_widget_rect", {
-      x: fx ? pos.x + cat - pw : pos.x,
-      y: fy ? pos.y - ph : pos.y + cat,
-      w: pw,
-      h: ph,
-    });
+    const rawX = fx ? pos.x + cat - pw : pos.x;
+    const rawY = fy ? pos.y - ph : pos.y + cat;
+    const x = area
+      ? Math.min(Math.max(area.position.x, area.position.x + area.size.width - pw), Math.max(area.position.x, rawX))
+      : rawX;
+    const y = area
+      ? Math.min(Math.max(area.position.y, area.position.y + area.size.height - ph), Math.max(area.position.y, rawY))
+      : rawY;
+    await invoke("set_widget_rect", { x, y, w: pw, h: ph });
     if (!shown) {
       shown = true;
       await win.show();
@@ -62,12 +74,14 @@ export function PanelWindow() {
   const onShow = () => {
     shown = false;
     panelH = 0;
+    setMaxH(undefined);
     setOpen(true);
   };
   const onHide = () => {
     setOpen(false);
     shown = false;
     panelH = 0;
+    setMaxH(undefined);
   };
 
   onMount(async () => {
@@ -80,8 +94,7 @@ export function PanelWindow() {
     if (await invoke<boolean>("is_panel_open")) onShow();
   });
 
-  const onPanelResize = (el: HTMLElement) => {
-    const h = el.offsetHeight;
+  const onPanelResize = (h: number) => {
     if (h === panelH) return;
     panelH = h;
     enqueue(layout);
@@ -90,37 +103,53 @@ export function PanelWindow() {
   return (
     <div class="widget" classList={{ "flip-x": flipX(), "flip-y": flipY() }}>
       <Show when={open()}>
-        <Panel onResize={onPanelResize} />
+        <Panel onResize={onPanelResize} maxH={maxH()} />
       </Show>
     </div>
   );
 }
 
-function Panel(props: { onResize: (el: HTMLElement) => void }) {
+function Panel(props: { onResize: (h: number) => void; maxH: number | undefined }) {
   let el!: HTMLDivElement;
+  let bodyEl!: HTMLDivElement;
   onMount(() => {
-    const ro = new ResizeObserver(() => props.onResize(el));
-    ro.observe(el);
+    const measure = () => {
+      const cs = getComputedStyle(el);
+      const chrome =
+        (parseFloat(cs.paddingTop) || 0) +
+        (parseFloat(cs.paddingBottom) || 0) +
+        (parseFloat(cs.borderTopWidth) || 0) +
+        (parseFloat(cs.borderBottomWidth) || 0);
+      props.onResize(Math.ceil(bodyEl.offsetHeight + chrome));
+    };
+    const ro = new ResizeObserver(measure);
+    ro.observe(bodyEl);
     onCleanup(() => ro.disconnect());
   });
 
   const m = () => metrics();
 
   return (
-    <div class="panel" ref={el}>
-      <CpuMeter m={m()} />
-      <MemMeter m={m()} />
-      <Show when={m()?.battery}>{(b) => <BatteryMeter b={b()} />}</Show>
-      <NetMeter m={m()} />
-      <Show when={(m()?.disks.length ?? 0) > 0}>
-        <DiskMeter disks={m()!.disks} />
-      </Show>
+    <div
+      class="panel"
+      ref={el}
+      style={{ "--panel-max-h": props.maxH != null ? `${props.maxH}px` : undefined }}
+    >
+      <div class="panel-body" ref={bodyEl}>
+        <CpuMeter m={m()} />
+        <MemMeter m={m()} />
+        <Show when={m()?.battery}>{(b) => <BatteryMeter b={b()} />}</Show>
+        <NetMeter m={m()} />
+        <Show when={(m()?.disks.length ?? 0) > 0}>
+          <DiskMeter disks={m()!.disks} />
+        </Show>
 
-      <Show when={modules().length > 0}>
-        <section class="sec modules">
-          <For each={modules()}>{(mod) => <ModuleRow mod={mod} />}</For>
-        </section>
-      </Show>
+        <Show when={modules().length > 0}>
+          <section class="sec modules">
+            <For each={modules()}>{(mod) => <ModuleRow mod={mod} />}</For>
+          </section>
+        </Show>
+      </div>
     </div>
   );
 }
