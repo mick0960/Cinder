@@ -1,8 +1,8 @@
-import { For, Show } from "solid-js";
-import type { ModuleConfig, ModuleOutput } from "../../types";
+import { For, Index, Show } from "solid-js";
+import type { HttpHeader, HttpMethod, ModuleConfig, ModuleOutput } from "../../types";
 import { COLOR_OK } from "../components/ModuleStyles";
 import { ClickEditor } from "./ClickEditor";
-import { FORMATS, MODULE_TYPES, PRESET_COLORS, SHELLS, withPersistent, withType } from "./moduleModel";
+import { FORMATS, HTTP_METHODS, MODULE_TYPES, PRESET_COLORS, SHELLS, withPersistent, withType } from "./moduleModel";
 import { StylePicker } from "./StylePicker";
 import { ThresholdEditor } from "./ThresholdEditor";
 
@@ -27,10 +27,28 @@ export function ModuleForm(props: {
   // 折叠区只按“打开表单时是否已有配置”决定展开；之后增删规则不会让它突然收起
   const openThresholds = m().thresholds.length > 0;
   const openClick = m().click != null;
+  const openHttpOpts = (m().httpHeaders?.length ?? 0) > 0 || !!m().httpNoProxy || !!m().httpInsecure;
+
+  const headers = () => m().httpHeaders ?? [];
+  const patchHeader = (i: number, p: Partial<HttpHeader>) =>
+    patch({ httpHeaders: headers().map((h, j) => (j === i ? { ...h, ...p } : h)) });
+  const addHeader = () => patch({ httpHeaders: [...headers(), { name: "", value: "" }] });
+  const removeHeader = (i: number) => patch({ httpHeaders: headers().filter((_, j) => j !== i) });
+
+  const httpOptsSummary = () => {
+    const parts: string[] = [];
+    if (headers().length > 0) parts.push(`${headers().length} 个请求头`);
+    if (m().httpNoProxy) parts.push("直连");
+    if (m().httpInsecure) parts.push("跳过 TLS 校验");
+    return parts.length ? parts.join(" · ") : "默认";
+  };
 
   const typeHint = () => MODULE_TYPES.find((t) => t.id === m().type)?.hint;
-  const timeoutLabel = () =>
-    m().type === "command" ? (m().persistent ? "无输出超时（毫秒）" : "超时（毫秒）") : "请求超时（毫秒）";
+  const timeoutLabel = () => {
+    if (m().type === "command") return m().persistent ? "无输出超时（毫秒）" : "超时（毫秒）";
+    if (m().type === "tcp") return "连接超时（毫秒）";
+    return "请求超时（毫秒）";
+  };
   const minInterval = () => (m().type === "http" ? 1000 : 500);
 
   return (
@@ -98,12 +116,30 @@ export function ModuleForm(props: {
       </Show>
 
       <Show when={m().type === "http"}>
-        <label>网址
+        <div class="http-req-row">
+          <label class="http-method">请求方法
+            <select
+              value={m().httpMethod ?? "GET"}
+              onChange={(e) => patch({ httpMethod: e.currentTarget.value as HttpMethod })}
+            >
+              <For each={HTTP_METHODS}>{(method) => <option value={method}>{method}</option>}</For>
+            </select>
+          </label>
+          <label class="http-url">网址
+            <input
+              spellcheck={false}
+              placeholder="https://api.example.com/status"
+              value={m().url}
+              onInput={(e) => patch({ url: e.currentTarget.value })}
+            />
+          </label>
+        </div>
+        <label>响应头字段（可选）
           <input
             spellcheck={false}
-            placeholder="https://api.example.com/status"
-            value={m().url}
-            onInput={(e) => patch({ url: e.currentTarget.value })}
+            placeholder="留空读正文；如 Subscription-Userinfo"
+            value={m().httpResponseHeader ?? ""}
+            onInput={(e) => patch({ httpResponseHeader: e.currentTarget.value })}
           />
         </label>
         <label>JSON 字段路径（可选）
@@ -114,10 +150,84 @@ export function ModuleForm(props: {
             onInput={(e) => patch({ jsonPath: e.currentTarget.value })}
           />
         </label>
+        <Show when={(m().httpMethod ?? "GET") === "POST"}>
+          <label>请求体（可选）
+            <textarea
+              rows={3}
+              spellcheck={false}
+              placeholder="JSON 或文本正文"
+              value={m().httpBody ?? ""}
+              onInput={(e) => patch({ httpBody: e.currentTarget.value })}
+            />
+          </label>
+        </Show>
         <div class="help">
-          发送 GET 请求，响应最大 1 MB，跟随系统代理。路径写法：<code>ip</code>、<code>data.temp</code>、<code>items[0].name</code>、
-          <code>items[-1]</code>（最后一项）。
+          响应最大 1 MB；<code>HEAD</code> 未填响应头字段时返回状态码；<code>POST</code> 正文以 <code>{"{"}</code> 或 <code>[</code> 开头且未自定义 Content-Type 时自动设为 JSON。
+          路径写法：<code>ip</code>、<code>data.temp</code>、<code>items[0].name</code>、<code>items[-1]</code>（最后一项）。
         </div>
+        <details class="fold" open={openHttpOpts}>
+          <summary>
+            请求头与连接选项
+            <span class="fold-sum">{httpOptsSummary()}</span>
+          </summary>
+          <div class="fold-body http-opts">
+            <div class="http-headers">
+              <Index each={headers()}>
+                {(h, i) => (
+                  <div class="hdr-row">
+                    <input
+                      class="hdr-name"
+                      spellcheck={false}
+                      placeholder="请求头名称，如 Authorization"
+                      aria-label="请求头名称"
+                      value={h().name}
+                      onInput={(e) => patchHeader(i, { name: e.currentTarget.value })}
+                    />
+                    <input
+                      class="hdr-val"
+                      spellcheck={false}
+                      placeholder="值"
+                      aria-label="请求头值"
+                      value={h().value}
+                      onInput={(e) => patchHeader(i, { value: e.currentTarget.value })}
+                    />
+                    <button
+                      type="button"
+                      class="rule-del"
+                      title="删除这条请求头"
+                      onClick={() => removeHeader(i)}
+                    >×</button>
+                  </div>
+                )}
+              </Index>
+              <div class="rule-foot">
+                <button type="button" class="link" onClick={addHeader}>＋ 添加请求头</button>
+              </div>
+            </div>
+            <label class="check">
+              <input
+                type="checkbox"
+                checked={!!m().httpNoProxy}
+                onChange={(e) => patch({ httpNoProxy: e.currentTarget.checked })}
+              />
+              <span>
+                直连（绕过系统代理）
+                <small>开启 Clash 等系统代理时，访问本机（127.0.0.1）、局域网或 NAS 服务建议勾选此项。</small>
+              </span>
+            </label>
+            <label class="check">
+              <input
+                type="checkbox"
+                checked={!!m().httpInsecure}
+                onChange={(e) => patch({ httpInsecure: e.currentTarget.checked })}
+              />
+              <span>
+                跳过 TLS 证书校验
+                <small>访问局域网自签名 HTTPS 服务（如路由器、NAS 管理页）时勾选；公网接口不建议开启。</small>
+              </span>
+            </label>
+          </div>
+        </details>
       </Show>
 
       <Show when={m().type === "ping"}>
@@ -130,6 +240,39 @@ export function ModuleForm(props: {
           />
         </label>
         <div class="help">每次刷新发送一个 ICMP 回显请求，显示往返毫秒数。暂不支持 IPv6。</div>
+      </Show>
+
+      <Show when={m().type === "tcp"}>
+        <div class="grid2">
+          <label>主机
+            <input
+              spellcheck={false}
+              placeholder="127.0.0.1 或域名"
+              value={m().host}
+              onInput={(e) => patch({ host: e.currentTarget.value })}
+            />
+          </label>
+          <label>端口
+            <input
+              type="number"
+              min={1}
+              max={65535}
+              step={1}
+              placeholder="80"
+              value={m().port || ""}
+              onInput={(e) => {
+                const raw = e.currentTarget.value.trim();
+                if (!raw) {
+                  patch({ port: 0 });
+                  return;
+                }
+                const n = Number(raw);
+                if (Number.isFinite(n)) patch({ port: Math.trunc(n) });
+              }}
+            />
+          </label>
+        </div>
+        <div class="help">每次刷新尝试建立 TCP 连接并测量握手延迟，支持 IPv4、IPv6（如 <code>::1</code>）与域名；连接成功后立即断开。</div>
       </Show>
 
       <div class="field">

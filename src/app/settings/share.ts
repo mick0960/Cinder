@@ -1,5 +1,5 @@
-import type { ClickAction, ModuleConfig, ModuleType, Shell, ThresholdRule } from "../../types";
-import { blankModule, defaultsFor, defaultUnit, isHttpUrl, moduleProblem, MODULE_TYPES, SHELLS, STYLES, FORMATS } from "./moduleModel";
+import type { ClickAction, HttpHeader, HttpMethod, ModuleConfig, ModuleType, Shell, ThresholdRule } from "../../types";
+import { blankModule, defaultsFor, defaultUnit, HTTP_METHODS, isHttpUrl, moduleProblem, MODULE_TYPES, SHELLS, STYLES, FORMATS } from "./moduleModel";
 
 /** 分享文本里的格式版本号 */
 export const SHARE_VERSION = 1;
@@ -23,9 +23,21 @@ function slim(m: ModuleConfig): Record<string, unknown> {
     if (m.persistent) out.persistent = true;
   } else if (m.type === "http") {
     out.url = m.url;
+    if (m.httpMethod && m.httpMethod !== "GET") out.httpMethod = m.httpMethod;
+    const headers = (m.httpHeaders ?? [])
+      .map((h) => ({ name: h.name.trim(), value: h.value }))
+      .filter((h) => h.name);
+    if (headers.length) out.httpHeaders = headers;
+    if (m.httpMethod === "POST" && m.httpBody) out.httpBody = m.httpBody;
+    if (m.httpResponseHeader?.trim()) out.httpResponseHeader = m.httpResponseHeader.trim();
+    if (m.httpNoProxy) out.httpNoProxy = true;
+    if (m.httpInsecure) out.httpInsecure = true;
     if (m.jsonPath) out.jsonPath = m.jsonPath;
   } else if (m.type === "ping") {
     out.host = m.host;
+  } else if (m.type === "tcp") {
+    out.host = m.host;
+    out.port = m.port;
   }
   // 常驻进程由脚本自己决定输出节奏，刷新间隔没有意义
   if (!(m.type === "command" && m.persistent)) out.intervalMs = m.intervalMs;
@@ -139,14 +151,37 @@ function sanitizeThresholds(raw: unknown, notes: string[]): ThresholdRule[] {
   return rules;
 }
 
+function sanitizeHeaders(raw: unknown, notes: string[]): HttpHeader[] {
+  if (raw == null) return [];
+  if (!Array.isArray(raw)) {
+    notes.push("请求头格式不正确，已忽略");
+    return [];
+  }
+  const headers: HttpHeader[] = [];
+  let dropped = 0;
+  for (const entry of raw.slice(0, 20)) {
+    const name = isObject(entry) ? text(entry.name, 128).trim() : "";
+    const validVal = isObject(entry) && (entry.value == null || typeof entry.value === "string");
+    if (name && validVal) {
+      headers.push({ name, value: text(entry.value, 2000) });
+    } else {
+      dropped++;
+    }
+  }
+  if (raw.length > 20) dropped += raw.length - 20;
+  if (dropped) notes.push(`${dropped} 条无效或超限的请求头已忽略`);
+  return headers;
+}
+
 function sanitizeModule(raw: unknown, index: number): ImportedModule | string {
   const label = `第 ${index + 1} 项`;
   if (!isObject(raw)) return `${label}：不是模块对象`;
 
   // 没写 type 时按填了哪个目标字段推断
   let type: ModuleType;
-  if (raw.type === undefined) type = raw.url ? "http" : raw.host ? "ping" : "command";
-  else {
+  if (raw.type === undefined) {
+    type = raw.url ? "http" : raw.host && raw.port ? "tcp" : raw.host ? "ping" : "command";
+  } else {
     const t = oneOf<ModuleType>(raw.type, TYPES);
     if (!t) return `${label}：不支持的模块类型「${text(raw.type, 20)}」（可能来自更新的 Cinder 版本）`;
     type = t;
@@ -163,8 +198,31 @@ function sanitizeModule(raw: unknown, index: number): ImportedModule | string {
   } else if (type === "http") {
     m.url = text(raw.url, 2000).trim();
     m.jsonPath = text(raw.jsonPath, 300).trim();
+    if (raw.httpMethod !== undefined) {
+      const method = typeof raw.httpMethod === "string"
+        ? oneOf<HttpMethod>(raw.httpMethod.trim().toUpperCase(), HTTP_METHODS)
+        : null;
+      if (method) m.httpMethod = method;
+      else notes.push("不支持的 HTTP 请求方法，已设为 GET");
+    }
+    m.httpHeaders = sanitizeHeaders(raw.httpHeaders, notes);
+    m.httpBody = m.httpMethod === "POST" ? text(raw.httpBody, 8000) : "";
+    m.httpResponseHeader = text(raw.httpResponseHeader, 128).trim();
+    m.httpNoProxy = raw.httpNoProxy === true;
+    m.httpInsecure = raw.httpInsecure === true;
   } else if (type === "ping") {
     m.host = text(raw.host, 253).trim();
+  } else if (type === "tcp") {
+    m.host = text(raw.host, 253).trim();
+    if (raw.port !== undefined) {
+      const p = number(raw.port, 1, 65535);
+      if (p != null) {
+        m.port = Math.round(p);
+        if (m.port !== raw.port) notes.push(`端口已调整为 ${m.port}`);
+      } else {
+        m.port = 0;
+      }
+    }
   }
   m.style = oneOf(raw.style, STYLE_IDS) ?? "text";
   // 先按新类型填入默认值，文本里写了的再覆盖

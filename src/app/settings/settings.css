@@ -321,6 +321,15 @@ button.link:hover { text-decoration: underline; }
 .rule-del:hover { color: #f66; background: rgba(255, 102, 102, 0.1); }
 .rule-foot { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .click-editor { display: flex; flex-direction: column; gap: 10px; padding-top: 8px; }
+.http-req-row { display: flex; gap: 10px; align-items: flex-start; }
+.http-method { flex: 0 0 92px; }
+.http-url { flex: 1; min-width: 0; }
+.http-opts { display: flex; flex-direction: column; gap: 10px; padding-top: 8px; }
+.http-headers { display: flex; flex-direction: column; gap: 8px; }
+.hdr-row { display: flex; align-items: center; gap: 6px; animation: field-in 0.25s var(--ease) backwards; }
+.form .hdr-row input.hdr-name { width: 0; flex: 0 0 38%; min-width: 0; }
+.form .hdr-row input.hdr-val { width: 0; flex: 1; min-width: 0; }
+.hdr-row .rule-del { margin-left: 0; flex: none; }
 .color-chip { display: inline-block; width: 11px; height: 11px; margin: 0 2px; border-radius: 3px; vertical-align: -1px; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25); }
 
 /* 对话框 */
