@@ -50,6 +50,16 @@ export interface ModuleItem {
   text: string;
   value: number | null;
   color: string | null;
+  /** 子分组 / 模型池名称（可选；多池账号内部分组用） */
+  subgroup?: string | null;
+  /** 状态徽章（如 暂停 / PRO） */
+  badge?: string | null;
+  /** 右侧附加副文本（如重置倒计时） */
+  sub?: string | null;
+  /** 悬停提示的补充说明 */
+  desc?: string | null;
+  /** 自然单位下的数值（用于指标卡等独立阈值着色） */
+  num?: number | null;
 }
 
 export type ModuleType = "command" | "http" | "ping" | "tcp" | "gpu";
@@ -85,7 +95,7 @@ export interface ModuleConfig {
   intervalMs: number;
   /** command 轮询：执行超时；command 常驻：多久没有输出就判定卡死并重启；http / ping / tcp：请求或连接超时 */
   timeoutMs: number;
-  style: "text" | "progress" | "sparkline";
+  style: "text" | "progress" | "sparkline" | "rings" | "cards";
   format: "plain" | "json";
   color: string | null;
   unit: string | null;

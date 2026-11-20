@@ -16,6 +16,14 @@ export function StyleGlyph(props: { style: ModuleConfig["style"] }) {
       <Show when={props.style === "sparkline"}>
         <path d="M1.5 12l3.5-4 3 2.5 5.5-7" />
       </Show>
+      <Show when={props.style === "rings"}>
+        <circle cx="8" cy="8" r="6" />
+        <circle cx="8" cy="8" r="3.2" />
+      </Show>
+      <Show when={props.style === "cards"}>
+        <rect x="1.5" y="3.5" width="5.5" height="9" rx="1.5" />
+        <rect x="9" y="3.5" width="5.5" height="9" rx="1.5" />
+      </Show>
     </svg>
   );
 }
@@ -38,7 +46,18 @@ export function StylePicker(props: { value: ModuleConfig["style"]; color: string
               <Show when={v === "text"}><span class="pv-text">42<small>°C</small></span></Show>
               <Show when={v === "progress"}><span class="pv-bar"><i /></span></Show>
               <Show when={v === "sparkline"}>
-                <svg viewBox="0 0 60 18" width="60" height="18"><polyline points="0,14 10,10 18,12 28,5 36,8 46,3 60,7" /></svg>
+                <svg viewBox="0 0 60 18" width="46" height="18"><polyline points="0,14 10,10 18,12 28,5 36,8 46,3 60,7" /></svg>
+              </Show>
+              <Show when={v === "rings"}>
+                <svg viewBox="0 0 22 22" width="20" height="20">
+                  <circle class="pv-ring-track" cx="11" cy="11" r="8.5" stroke-width="2.2" />
+                  <circle class="pv-ring-arc pv-ring-out" cx="11" cy="11" r="8.5" stroke-width="2.2" stroke="#4cc2ff" transform="rotate(-90 11 11)" />
+                  <circle class="pv-ring-track" cx="11" cy="11" r="4.8" stroke-width="2" />
+                  <circle class="pv-ring-arc pv-ring-in" cx="11" cy="11" r="4.8" stroke-width="2" stroke="#a78bfa" transform="rotate(-90 11 11)" />
+                </svg>
+              </Show>
+              <Show when={v === "cards"}>
+                <span class="pv-cards"><i>4.8</i><i>12M</i></span>
               </Show>
             </span>
             <span class="pv-label">{t}</span>

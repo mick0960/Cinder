@@ -108,7 +108,7 @@
 }
 
 /* 样式选择卡片 */
-.style-picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.style-picker { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 .style-card {
   display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 6px 8px;
   background: var(--bg-2); border: 1px solid #3c3c43; border-radius: 9px; color: #bbb; cursor: pointer; font: inherit; font-size: 12px;
@@ -121,16 +121,35 @@
 .pv { height: 20px; display: flex; align-items: center; justify-content: center; color: var(--c); }
 .pv-text { font-weight: 600; font-size: 15px; font-variant-numeric: tabular-nums; }
 .pv-text small { font-size: 10px; opacity: 0.75; }
-.pv-bar { width: 56px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.pv-bar { width: 44px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
 .pv-bar i { display: block; height: 100%; width: 70%; border-radius: 3px; background: var(--c); }
 .pv svg polyline { fill: none; stroke: var(--c); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; stroke-dasharray: 80; stroke-dashoffset: 0; }
+.pv-rings svg { overflow: visible; }
+.pv-ring-track { fill: none; stroke: rgba(255, 255, 255, 0.12); }
+.pv-ring-arc { fill: none; stroke-linecap: round; }
+.pv-ring-out { stroke-dasharray: 53.41; stroke-dashoffset: 12; }
+.pv-ring-in { stroke-dasharray: 30.16; stroke-dashoffset: 10; }
+.pv-cards { display: flex; gap: 3px; align-items: center; }
+.pv-cards i {
+  font-style: normal; font-size: 9px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1;
+  padding: 3px 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.pv-cards i:first-child { color: #4cd97b; }
+.pv-cards i:last-child { color: #4cc2ff; }
 /* 悬停或选中时预览动起来 */
 .style-card:hover .pv-bar i, .style-card.active .pv-bar i { animation: pv-fill 1.6s var(--ease) infinite alternate; }
 .style-card:hover .pv polyline, .style-card.active .pv polyline { animation: pv-draw 1.8s var(--ease) infinite; }
 .style-card:hover .pv-text, .style-card.active .pv-text { animation: pv-tick 1.6s ease-in-out infinite; }
+.style-card:hover .pv-ring-out, .style-card.active .pv-ring-out { animation: pv-ring-out 1.8s var(--ease) infinite alternate; }
+.style-card:hover .pv-ring-in, .style-card.active .pv-ring-in { animation: pv-ring-in 1.8s var(--ease) infinite alternate; }
+.style-card:hover .pv-cards i, .style-card.active .pv-cards i { animation: pv-card-pop 1.6s var(--ease) infinite alternate; }
+.style-card:hover .pv-cards i:last-child, .style-card.active .pv-cards i:last-child { animation-delay: 0.25s; }
 @keyframes pv-fill { from { width: 15%; } to { width: 85%; } }
 @keyframes pv-draw { from { stroke-dashoffset: 80; } 70%, to { stroke-dashoffset: 0; } }
 @keyframes pv-tick { 50% { transform: translateY(-2px); opacity: 0.7; } }
+@keyframes pv-ring-out { from { stroke-dashoffset: 40; } to { stroke-dashoffset: 8; } }
+@keyframes pv-ring-in { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 6; } }
+@keyframes pv-card-pop { from { transform: translateY(0); } to { transform: translateY(-1.5px); } }
 
 /* 颜色色板 */
 .color-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }

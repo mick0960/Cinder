@@ -186,6 +186,110 @@
 .sparkline polyline { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
 .sparkline circle { fill: currentColor; }
 
+/* ---------- 嵌套圆环（style: "rings"） ---------- */
+.ring-list { display: flex; flex-direction: column; gap: 5px; margin-top: 3px; }
+.ring-svg { flex: none; overflow: visible; }
+.ring-track { fill: none; stroke: rgba(255, 255, 255, 0.09); }
+.ring-arc {
+  fill: none; stroke-linecap: round;
+  transition: stroke-dashoffset 0.75s cubic-bezier(0.3, 0.8, 0.3, 1), stroke 0.35s ease;
+}
+.ring-err-mark { fill: #c77; font-size: 11px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; }
+
+.ring-card {
+  display: flex; align-items: center; gap: 7px; min-width: 0;
+  padding: 2.5px 4px; margin: 0 -4px; border-radius: 7px;
+  transition: background-color 0.15s;
+}
+.ring-card:hover { background: rgba(255, 255, 255, 0.055); }
+.ring-card.clickable { cursor: pointer; }
+.ring-card.click-ok { animation: click-ok 0.7s ease-out; }
+.ring-card.click-err { animation: click-err 0.7s ease-out; }
+.ring-card.dimmed, .ring-grp.dimmed { opacity: 0.75; }
+
+.ring-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.5px; }
+.ring-head { display: flex; align-items: center; justify-content: space-between; gap: 5px; }
+.ring-name { color: #e8e8ee; font-weight: 600; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ring-badge {
+  flex: none; font-size: 9px; font-weight: 600; line-height: 1.25; padding: 0.5px 4px; border-radius: 4px;
+  color: #a78bfa; background: rgba(167, 139, 250, 0.16);
+}
+.ring-badge.warn { color: #ffb547; background: rgba(255, 181, 71, 0.15); }
+
+.ring-line { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 10px; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.ring-line-left { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.ring-dot { width: 5px; height: 5px; border-radius: 999px; flex: none; }
+.ring-dot.inline { display: inline-block; margin-right: 4px; vertical-align: 1px; }
+.ring-k { color: #8a8a94; flex: none; }
+.ring-v { font-weight: 600; }
+.ring-v.err { color: #c77; }
+.ring-sub { color: #84848e; font-size: 9.5px; white-space: nowrap; }
+
+.ring-grp { position: relative; margin-top: 2px; padding-top: 5px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.ring-grp-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 5px;
+  padding: 2.5px 4px; margin: 0 -4px 3px; border-radius: 6px;
+  cursor: pointer; transition: background-color 0.15s;
+}
+.ring-grp-head:hover { background: rgba(255, 255, 255, 0.065); }
+.ring-grp-left { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.ring-chev { color: #8a8a96; font-size: 10px; width: 10px; text-align: center; flex: none; }
+.ring-grp-sum { color: #84848e; font-size: 9.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.ring-mini-grid { display: grid; gap: 4px; margin-top: 2px; }
+.ring-mini {
+  display: flex; flex-direction: column; align-items: center; min-width: 0;
+  padding: 4px 2px 3px; border-radius: 7px;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background-color 0.15s, border-color 0.15s;
+}
+.ring-mini:hover { background: rgba(255, 255, 255, 0.07); border-color: rgba(255, 255, 255, 0.12); }
+.ring-mini-name {
+  color: #dedee6; font-size: 9.5px; font-weight: 600; line-height: 1.2; margin-top: 2px;
+  max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ring-mini-vals {
+  display: flex; align-items: center; gap: 2px; margin-top: 1px;
+  font-size: 9px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums;
+}
+.ring-mini-sep { opacity: 0.35; color: #9a9aa4; }
+
+.ring-tip, .stat-tip {
+  position: absolute; left: 0; right: 0; bottom: calc(100% + 4px); z-index: 10; pointer-events: none;
+  padding: 6px 8px; border-radius: 8px;
+  background: rgba(16, 16, 20, 0.96); border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  font-size: 10.5px; line-height: 1.4; color: #e4e4ec;
+}
+.ring-tip-title { font-weight: 600; color: #fff; margin-bottom: 1.5px; }
+.ring-tip-desc { font-size: 9.5px; color: #8c8c98; margin-bottom: 3px; line-height: 1.3; }
+.ring-tip-row { display: flex; justify-content: space-between; gap: 6px; font-variant-numeric: tabular-nums; color: #c8c8d2; }
+.ring-tip-sub { color: #8e8e98; white-space: nowrap; }
+
+/* ---------- 指标卡（style: "cards"） ---------- */
+.stat-wrap { position: relative; margin-top: 3px; }
+.stat-grid { display: grid; gap: 6px; }
+.stat-card {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  padding: 6px 8px 5px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: background-color 0.15s, border-color 0.15s;
+}
+.stat-card:hover { background: rgba(255, 255, 255, 0.07); border-color: rgba(255, 255, 255, 0.13); }
+.stat-card.single { margin-top: 2px; }
+.stat-card.clickable { cursor: pointer; }
+.stat-card.click-ok { animation: click-ok 0.7s ease-out; }
+.stat-card.click-err { animation: click-err 0.7s ease-out; }
+.stat-card-head { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-width: 0; }
+.stat-card-label { color: #9a9aa4; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-card-val {
+  font-size: 15px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color 0.3s;
+}
+.stat-card-val.err { color: #c77; }
+.stat-card-sub { color: #82828c; font-size: 9.5px; line-height: 1.2; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-tip-desc { color: #c8c8d2; font-size: 10px; line-height: 1.45; white-space: pre-line; font-variant-numeric: tabular-nums; }
+
 @media (prefers-reduced-motion: reduce) {
   .panel, .panel *, .panel *::after { animation: none !important; transition: none !important; }
 }

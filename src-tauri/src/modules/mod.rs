@@ -67,6 +67,16 @@ pub struct ModuleItem {
     pub text: String,
     pub value: Option<f64>,
     pub color: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subgroup: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub badge: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sub: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub desc: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub num: Option<f64>,
 }
 
 #[derive(Deserialize, Default)]
@@ -368,14 +378,15 @@ fn build_output(
     let color = color
         .or_else(|| num.and_then(|n| value::threshold_color(&cfg.thresholds, n)))
         .or_else(|| cfg.color.clone());
-    // 多行条目：数值是 0~1 的比例，阈值按百分数比较
+    // 多行条目：优先使用自然单位 num，其次将 0~1 的比例 value 换算为百分数供阈值比较
     let items = items.map(|items| {
         items
             .into_iter()
             .map(|mut it| {
+                let item_num = it.num.filter(|n| n.is_finite()).or_else(|| it.value.map(|v| v * 100.0));
                 it.color = it
                     .color
-                    .or_else(|| it.value.and_then(|v| value::threshold_color(&cfg.thresholds, v * 100.0)))
+                    .or_else(|| item_num.and_then(|n| value::threshold_color(&cfg.thresholds, n)))
                     .or_else(|| cfg.color.clone());
                 it
             })
@@ -384,11 +395,11 @@ fn build_output(
     ModuleOutput { id: cfg.id.clone(), kind: "ok".into(), text, value, num, color, items }
 }
 
-/// 把 num 换算成进度条 / 折线用的比例。进度条限制在 0~1，折线只看相对起伏所以不截断
+/// 把 num 换算成进度条 / 圆环 / 折线用的比例。进度条与圆环限制在 0~1，折线只看相对起伏所以不截断
 fn ratio(style: &str, num: Option<f64>) -> Option<f64> {
     let n = num?;
     match style {
-        "progress" => Some((n / 100.0).clamp(0.0, 1.0)),
+        "progress" | "rings" => Some((n / 100.0).clamp(0.0, 1.0)),
         "sparkline" => Some(n / 100.0),
         _ => None,
     }
@@ -412,9 +423,9 @@ fn parse_output(cfg: &ModuleConfig, raw: String) -> ModuleOutput {
 
     let text = raw.trim().to_string();
     let strict = value::whole_number(&text);
-    // 进度条要求整段文本就是数字，避免把“8.8 / 512 GB”误读成 8.8%；折线、阈值、驱动则取文本里的第一个数
+    // 进度条 / 圆环要求整段文本就是数字，避免把“8.8 / 512 GB”误读成 8.8%；折线、阈值、驱动则取文本里的第一个数
     let num = strict.or_else(|| value::first_number(&text));
-    let value = ratio(&cfg.style, if cfg.style == "progress" { strict } else { num });
+    let value = ratio(&cfg.style, if matches!(cfg.style.as_str(), "progress" | "rings") { strict } else { num });
     build_output(cfg, text, value, num, None, None)
 }
 
@@ -447,6 +458,8 @@ mod tests {
         assert_eq!((o.value, o.num), (None, Some(23.0)));
         let o = parse_output(&cfg("text", "plain"), "运行中".into());
         assert_eq!((o.value, o.num), (None, None));
+        let o = parse_output(&cfg("rings", "plain"), "73%".into());
+        assert_eq!((o.value, o.num), (Some(0.73), Some(73.0)));
     }
 
     #[test]
@@ -482,6 +495,44 @@ mod tests {
         );
         let colors: Vec<_> = o.items.unwrap().into_iter().map(|i| i.color).collect();
         assert_eq!(colors, vec![Some("#ff0000".into()), None, Some("#abcdef".into())]);
+    }
+
+    #[test]
+    fn rings_items_deserialize_and_lt_thresholds_apply() {
+        let mut c = cfg("rings", "json");
+        c.thresholds = vec![rule("lt", 25.01, "#ffb547"), rule("lt", 10.01, "#ff5d5d")];
+        let o = parse_output(
+            &c,
+            r##"{"text":"2 个账号","value":0.09,"items":[{"group":"Google One Pro #1","subgroup":"Gemini","badge":"PRO","label":"5h","text":"18%","value":0.18,"sub":"48分","desc":"Gemini pool"},{"group":"Google One Pro #1","subgroup":"Argon","badge":"PRO","label":"7d","text":"9%","value":0.09,"sub":"4天19时"},{"group":"ChatGPT Plus #1","label":"5h","text":"82%","value":0.82,"sub":"2时18分"}]}"##
+                .into(),
+        );
+        let items = o.items.unwrap();
+        assert_eq!(items.len(), 3);
+        assert_eq!(items[0].subgroup.as_deref(), Some("Gemini"));
+        assert_eq!(items[0].badge.as_deref(), Some("PRO"));
+        assert_eq!(items[0].sub.as_deref(), Some("48分"));
+        assert_eq!(items[0].desc.as_deref(), Some("Gemini pool"));
+        assert_eq!(items[0].color.as_deref(), Some("#ffb547"));
+        assert_eq!(items[1].color.as_deref(), Some("#ff5d5d"));
+        assert_eq!(items[2].subgroup, None);
+        assert_eq!(items[2].color, None);
+    }
+
+    #[test]
+    fn cards_items_use_natural_num_for_thresholds() {
+        let mut c = cfg("cards", "json");
+        c.thresholds = vec![rule("gt", 10.0, "#ffb547"), rule("gt", 20.0, "#ff5d5d")];
+        let o = parse_output(
+            &c,
+            r##"{"text":"今日","num":15.0,"items":[{"label":"今日花费","text":"$15.00","num":15.0,"sub":"12 次请求"},{"label":"今日 Tokens","text":"1.2M","sub":"缓存 80%"}]}"##
+                .into(),
+        );
+        let items = o.items.unwrap();
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].num, Some(15.0));
+        assert_eq!(items[0].color.as_deref(), Some("#ffb547"));
+        assert_eq!(items[1].num, None);
+        assert_eq!(items[1].color, None);
     }
 
     #[test]

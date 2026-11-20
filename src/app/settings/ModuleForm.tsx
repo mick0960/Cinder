@@ -396,8 +396,11 @@ export function ModuleForm(props: {
                 <For each={r.output!.items!}>
                   {(it) => (
                     <div class="item">
-                      {it.group ? `${it.group} / ` : ""}{it.label}：{it.text || "—"}
-                      {it.value != null ? ` (${it.value})` : ""}
+                      {it.group ? `${it.group}${it.badge ? ` [${it.badge}]` : ""} / ` : ""}
+                      {it.subgroup ? `${it.subgroup} / ` : ""}
+                      {it.label}：{it.text || "—"}
+                      {it.sub ? ` · ${it.sub}` : ""}
+                      {it.value != null ? ` (${it.value})` : it.num != null ? ` (${it.num})` : ""}
                     </div>
                   )}
                 </For>

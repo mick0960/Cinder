@@ -24,6 +24,8 @@ export const STYLES: [ModuleConfig["style"], string][] = [
   ["text", "文本"],
   ["progress", "进度条"],
   ["sparkline", "趋势折线"],
+  ["rings", "圆环"],
+  ["cards", "指标卡"],
 ];
 export const FORMATS: [ModuleConfig["format"], string][] = [
   ["plain", "纯文本"],
