@@ -108,7 +108,7 @@
 }
 
 /* 样式选择卡片 */
-.style-picker { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.style-picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .style-card {
   display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 6px 8px;
   background: var(--bg-2); border: 1px solid #3c3c43; border-radius: 9px; color: #bbb; cursor: pointer; font: inherit; font-size: 12px;
@@ -136,6 +136,13 @@
 }
 .pv-cards i:first-child { color: #4cd97b; }
 .pv-cards i:last-child { color: #4cc2ff; }
+.pv-status { display: flex; flex-direction: column; gap: 4px; width: 44px; }
+.pv-status-row { display: flex; align-items: center; gap: 4px; }
+.pv-status-row em { width: 5px; height: 5px; border-radius: 999px; background: rgba(255, 255, 255, 0.25); flex: none; font-style: normal; }
+.pv-status-row em.on { background: #4cd97b; box-shadow: 0 0 5px rgba(76, 217, 123, 0.65); }
+.pv-status-row i { flex: 1; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.12); overflow: hidden; position: relative; }
+.pv-status-row i::after { content: ""; position: absolute; inset: 0 auto 0 0; width: 72%; border-radius: 2px; background: var(--c); }
+.pv-status-row i.half::after { width: 35%; opacity: 0.6; }
 /* 悬停或选中时预览动起来 */
 .style-card:hover .pv-bar i, .style-card.active .pv-bar i { animation: pv-fill 1.6s var(--ease) infinite alternate; }
 .style-card:hover .pv polyline, .style-card.active .pv polyline { animation: pv-draw 1.8s var(--ease) infinite; }
@@ -144,6 +151,8 @@
 .style-card:hover .pv-ring-in, .style-card.active .pv-ring-in { animation: pv-ring-in 1.8s var(--ease) infinite alternate; }
 .style-card:hover .pv-cards i, .style-card.active .pv-cards i { animation: pv-card-pop 1.6s var(--ease) infinite alternate; }
 .style-card:hover .pv-cards i:last-child, .style-card.active .pv-cards i:last-child { animation-delay: 0.25s; }
+.style-card:hover .pv-status-row i::after, .style-card.active .pv-status-row i::after { animation: pv-fill 1.6s var(--ease) infinite alternate; }
+.style-card:hover .pv-status-row i.half::after, .style-card.active .pv-status-row i.half::after { animation-delay: 0.3s; }
 @keyframes pv-fill { from { width: 15%; } to { width: 85%; } }
 @keyframes pv-draw { from { stroke-dashoffset: 80; } 70%, to { stroke-dashoffset: 0; } }
 @keyframes pv-tick { 50% { transform: translateY(-2px); opacity: 0.7; } }

@@ -398,8 +398,10 @@ export function ModuleForm(props: {
                     <div class="item">
                       {it.group ? `${it.group}${it.badge ? ` [${it.badge}]` : ""} / ` : ""}
                       {it.subgroup ? `${it.subgroup} / ` : ""}
+                      {it.status ? `[${it.status}] ` : ""}
                       {it.label}：{it.text || "—"}
                       {it.sub ? ` · ${it.sub}` : ""}
+                      {it.subRight ? ` · ${it.subRight}` : ""}
                       {it.value != null ? ` (${it.value})` : it.num != null ? ` (${it.num})` : ""}
                     </div>
                   )}

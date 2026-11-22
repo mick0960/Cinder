@@ -227,6 +227,9 @@ function ModuleRow(props: { mod: ModuleConfig }) {
           <Match when={props.mod.style === "cards"}>
             <ModuleCards mod={props.mod} out={out()!} click={click} title={rowTitle()} />
           </Match>
+          <Match when={props.mod.style === "status"}>
+            <ModuleStatus mod={props.mod} out={out()!} click={click} title={rowTitle()} />
+          </Match>
         </Switch>
       }
     >
@@ -300,6 +303,35 @@ function ModuleRow(props: { mod: ModuleConfig }) {
             <div class="stat-card-val" classList={{ err: isErr() }} style={{ color: isErr() ? undefined : (color() ?? "#4cd97b") }}>
               {text()}
             </div>
+          </div>
+        </Match>
+        <Match when={props.mod.style === "status"}>
+          <div
+            class="status-card single"
+            classList={{ clickable: click.enabled(), "click-ok": click.flash() === "ok", "click-err": click.flash() === "err" }}
+            title={rowTitle()}
+            onClick={click.run}
+          >
+            <div class="status-top">
+              <span class="status-left">
+                <span class="status-dot" classList={{ online: !isErr() && !!out(), error: isErr(), offline: !out() }} />
+                <span class="status-name" title={props.mod.name}>{props.mod.name}</span>
+              </span>
+              <span class="status-val" classList={{ err: isErr() }} style={{ color: isErr() ? undefined : color() }}>
+                {text()}
+              </span>
+            </div>
+            <Show when={!isErr() && out()?.value != null}>
+              <div class="status-bar">
+                <div
+                  class="status-fill"
+                  style={{
+                    width: `${statusBarPct(out()!.value!)}%`,
+                    "--c": color() ?? "#4cc2ff",
+                  }}
+                />
+              </div>
+            </Show>
           </div>
         </Match>
       </Switch>
@@ -736,6 +768,135 @@ function ModuleCards(props: { mod: ModuleConfig; out: ModuleOutput; click: Modul
               <div class="stat-tip-desc">{desc()}</div>
             </div>
           )}
+        </Show>
+      </div>
+    </>
+  );
+}
+
+/* ---------- 状态列表样式（style: "status"） ---------- */
+
+function statusBarPct(value: number): number {
+  const clamped = clamp01(value) * 100;
+  return clamped > 0 ? Math.max(2, clamped) : 0;
+}
+
+function statusBarColor(it: ModuleItem): string {
+  if (it.color) return it.color;
+  if (it.status === "error") return "#7a7a85";
+  if (it.status === "warn") return "#ffb547";
+  if (it.status === "offline") return "#6b8499";
+  return "#4cc2ff";
+}
+
+function statusDotClass(status?: string | null): Record<string, boolean> {
+  return {
+    online: status === "online",
+    offline: status === "offline",
+    warn: status === "warn",
+    error: status === "error",
+  };
+}
+
+function statusLabelText(status?: string | null): { text: string; color: string } | null {
+  switch (status) {
+    case "online": return { text: "在线", color: "#4cd97b" };
+    case "offline": return { text: "离线", color: "#9a9aa4" };
+    case "warn": return { text: "预警", color: "#ffb547" };
+    case "error": return { text: "停用", color: "#ff5d5d" };
+    default: return null;
+  }
+}
+
+function ModuleStatus(props: { mod: ModuleConfig; out: ModuleOutput; click: ModuleClick; title?: string }) {
+  const items = () => props.out.items ?? [];
+  const hasOnline = () => items().some((it) => it.status === "online");
+  const [hoveredIdx, setHoveredIdx] = createSignal<number | null>(null);
+  const hoveredItem = () => {
+    const idx = hoveredIdx();
+    return idx != null ? items()[idx] ?? null : null;
+  };
+
+  return (
+    <>
+      <div
+        class="row module"
+        classList={{ clickable: props.click.enabled(), "click-ok": props.click.flash() === "ok", "click-err": props.click.flash() === "err" }}
+        title={props.title}
+        onClick={props.click.run}
+      >
+        <span class="label" title={props.mod.name}>{props.mod.name}</span>
+        <span class="value module-sum status-sum">
+          <Show when={hasOnline()}>
+            <span class="status-sum-dot" />
+          </Show>
+          {props.out.text}
+        </span>
+      </div>
+      <div class="status-wrap">
+        <div class="status-list">
+          <Index each={items()}>
+            {(it, idx) => {
+              const dimmed = () => it().status === "offline" || it().status === "error";
+              return (
+                <div
+                  class="status-card"
+                  classList={{ dimmed: dimmed() }}
+                  title={it().desc ? `${it().label}\n${it().desc}` : it().label}
+                  onMouseEnter={() => setHoveredIdx(idx)}
+                  onMouseLeave={() => setHoveredIdx((cur) => (cur === idx ? null : cur))}
+                >
+                  <div class="status-top">
+                    <span class="status-left">
+                      <Show when={it().status}>
+                        <span class="status-dot" classList={statusDotClass(it().status)} />
+                      </Show>
+                      <span class="status-name" title={it().label}>{it().label}</span>
+                      <Show when={it().badge}>
+                        {(b) => (
+                          <span class="ring-badge" classList={{ warn: isWarnBadge(b()) }}>{b()}</span>
+                        )}
+                      </Show>
+                    </span>
+                    <span class="status-val" style={{ color: it().color ?? undefined }}>{it().text}</span>
+                  </div>
+                  <Show when={it().value != null}>
+                    <div class="status-bar">
+                      <div
+                        class="status-fill"
+                        style={{
+                          width: `${statusBarPct(it().value!)}%`,
+                          "--c": statusBarColor(it()),
+                        }}
+                      />
+                    </div>
+                  </Show>
+                  <Show when={it().sub || it().subRight}>
+                    <div class="status-sub">
+                      <span class="status-sub-left">{it().sub ?? ""}</span>
+                      <span class="status-sub-right">{it().subRight ?? ""}</span>
+                    </div>
+                  </Show>
+                </div>
+              );
+            }}
+          </Index>
+        </div>
+        <Show when={hoveredItem()?.desc}>
+          {(desc) => {
+            const st = () => statusLabelText(hoveredItem()?.status);
+            return (
+              <div class="stat-tip">
+                <div class="ring-tip-title status-tip-head">
+                  <span>{hoveredItem()!.label}</span>
+                  <Show when={st()}>
+                    {(s) => <span style={{ color: s().color, "font-weight": 500 }}>{s().text}</span>}
+                  </Show>
+                </div>
+                <div class="stat-tip-desc">{desc()}</div>
+              </div>
+            );
+          }}
         </Show>
       </div>
     </>

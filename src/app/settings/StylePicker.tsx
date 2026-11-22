@@ -24,6 +24,12 @@ export function StyleGlyph(props: { style: ModuleConfig["style"] }) {
         <rect x="1.5" y="3.5" width="5.5" height="9" rx="1.5" />
         <rect x="9" y="3.5" width="5.5" height="9" rx="1.5" />
       </Show>
+      <Show when={props.style === "status"}>
+        <circle class="solid" cx="3" cy="5.5" r="1.2" />
+        <path d="M6 5.5h8" />
+        <circle cx="3" cy="10.5" r="1.2" />
+        <path d="M6 10.5h6" />
+      </Show>
     </svg>
   );
 }
@@ -58,6 +64,12 @@ export function StylePicker(props: { value: ModuleConfig["style"]; color: string
               </Show>
               <Show when={v === "cards"}>
                 <span class="pv-cards"><i>4.8</i><i>12M</i></span>
+              </Show>
+              <Show when={v === "status"}>
+                <span class="pv-status">
+                  <span class="pv-status-row"><em class="on" /><i /></span>
+                  <span class="pv-status-row"><em /><i class="half" /></span>
+                </span>
               </Show>
             </span>
             <span class="pv-label">{t}</span>

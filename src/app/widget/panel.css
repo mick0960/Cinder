@@ -290,6 +290,57 @@
 .stat-card-sub { color: #82828c; font-size: 9.5px; line-height: 1.2; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stat-tip-desc { color: #c8c8d2; font-size: 10px; line-height: 1.45; white-space: pre-line; font-variant-numeric: tabular-nums; }
 
+/* ---------- 状态列表（style: "status"） ---------- */
+.row.module .value.status-sum { display: inline-flex; align-items: center; gap: 5px; }
+.status-sum-dot { width: 5px; height: 5px; border-radius: 999px; background: #4cd97b; box-shadow: 0 0 6px rgba(76, 217, 123, 0.7); flex: none; }
+.status-wrap { position: relative; margin-top: 3px; }
+.status-list { display: flex; flex-direction: column; gap: 5px; }
+.status-card {
+  display: flex; flex-direction: column; min-width: 0;
+  padding: 5px 7px; border-radius: 7px;
+  background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(255, 255, 255, 0.055);
+  transition: background-color 0.15s, border-color 0.15s, opacity 0.15s;
+}
+.status-card:hover { background: rgba(255, 255, 255, 0.075); border-color: rgba(255, 255, 255, 0.13); }
+.status-card.dimmed { opacity: 0.64; }
+.status-card.dimmed:hover { opacity: 0.94; }
+.status-card.single { margin-top: 2px; }
+.status-card.clickable { cursor: pointer; }
+.status-card.click-ok { animation: click-ok 0.7s ease-out; }
+.status-card.click-err { animation: click-err 0.7s ease-out; }
+.status-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+.status-left { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.status-dot { position: relative; width: 6px; height: 6px; border-radius: 999px; flex: none; background: rgba(255, 255, 255, 0.24); }
+.status-dot.online { background: #4cd97b; box-shadow: 0 0 6px rgba(76, 217, 123, 0.65); }
+.status-dot.online::after {
+  content: ""; position: absolute; inset: -3px; border-radius: 999px;
+  border: 1px solid rgba(76, 217, 123, 0.55);
+  animation: status-ping 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+.status-dot.offline { background: rgba(255, 255, 255, 0.22); }
+.status-dot.warn { background: #ffb547; }
+.status-dot.error { background: #ff5d5d; }
+@keyframes status-ping {
+  0% { transform: scale(0.75); opacity: 0.75; }
+  75%, 100% { transform: scale(1.9); opacity: 0; }
+}
+.status-name { color: #e8e8ee; font-weight: 600; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status-val { color: #e2e2ea; font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; flex: none; transition: color 0.3s; }
+.status-val.err { color: #c77; }
+.status-bar { height: 3.5px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); margin: 4px 0 3px; overflow: hidden; }
+.status-fill {
+  height: 100%; border-radius: 3px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--c) 55%, transparent), var(--c));
+  transition: width 0.5s cubic-bezier(0.3, 0.8, 0.3, 1);
+}
+.status-sub {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  font-size: 9.5px; line-height: 1.25; color: #84848e; font-variant-numeric: tabular-nums;
+}
+.status-sub-left { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-sub-right { flex: none; white-space: nowrap; }
+.status-tip-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
 @media (prefers-reduced-motion: reduce) {
   .panel, .panel *, .panel *::after { animation: none !important; transition: none !important; }
 }

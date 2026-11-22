@@ -58,6 +58,10 @@ export interface ModuleItem {
   sub?: string | null;
   /** 悬停提示的补充说明 */
   desc?: string | null;
+  /** 状态指示点（状态列表样式用：online / offline / warn / error） */
+  status?: "online" | "offline" | "warn" | "error" | null;
+  /** 底部右侧副文本（状态列表样式用，如占比或离线时长） */
+  subRight?: string | null;
   /** 自然单位下的数值（用于指标卡等独立阈值着色） */
   num?: number | null;
 }
@@ -95,7 +99,7 @@ export interface ModuleConfig {
   intervalMs: number;
   /** command 轮询：执行超时；command 常驻：多久没有输出就判定卡死并重启；http / ping / tcp：请求或连接超时 */
   timeoutMs: number;
-  style: "text" | "progress" | "sparkline" | "rings" | "cards";
+  style: "text" | "progress" | "sparkline" | "rings" | "cards" | "status";
   format: "plain" | "json";
   color: string | null;
   unit: string | null;

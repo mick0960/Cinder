@@ -76,6 +76,10 @@ pub struct ModuleItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(rename = "subRight", alias = "sub_right", skip_serializing_if = "Option::is_none")]
+    pub sub_right: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub num: Option<f64>,
 }
 
@@ -395,11 +399,11 @@ fn build_output(
     ModuleOutput { id: cfg.id.clone(), kind: "ok".into(), text, value, num, color, items }
 }
 
-/// 把 num 换算成进度条 / 圆环 / 折线用的比例。进度条与圆环限制在 0~1，折线只看相对起伏所以不截断
+/// 把 num 换算成进度条 / 圆环 / 状态列表 / 折线用的比例。进度条、圆环与状态列表限制在 0~1，折线只看相对起伏所以不截断
 fn ratio(style: &str, num: Option<f64>) -> Option<f64> {
     let n = num?;
     match style {
-        "progress" | "rings" => Some((n / 100.0).clamp(0.0, 1.0)),
+        "progress" | "rings" | "status" => Some((n / 100.0).clamp(0.0, 1.0)),
         "sparkline" => Some(n / 100.0),
         _ => None,
     }
@@ -423,9 +427,9 @@ fn parse_output(cfg: &ModuleConfig, raw: String) -> ModuleOutput {
 
     let text = raw.trim().to_string();
     let strict = value::whole_number(&text);
-    // 进度条 / 圆环要求整段文本就是数字，避免把“8.8 / 512 GB”误读成 8.8%；折线、阈值、驱动则取文本里的第一个数
+    // 进度条 / 圆环 / 状态列表要求整段文本就是数字，避免把“8.8 / 512 GB”误读成 8.8%；折线、阈值、驱动则取文本里的第一个数
     let num = strict.or_else(|| value::first_number(&text));
-    let value = ratio(&cfg.style, if matches!(cfg.style.as_str(), "progress" | "rings") { strict } else { num });
+    let value = ratio(&cfg.style, if matches!(cfg.style.as_str(), "progress" | "rings" | "status") { strict } else { num });
     build_output(cfg, text, value, num, None, None)
 }
 
@@ -533,6 +537,26 @@ mod tests {
         assert_eq!(items[0].color.as_deref(), Some("#ffb547"));
         assert_eq!(items[1].num, None);
         assert_eq!(items[1].color, None);
+    }
+
+    #[test]
+    fn status_items_deserialize_and_thresholds_apply() {
+        let mut c = cfg("status", "json");
+        c.thresholds = vec![rule("gt", 75.0, "#ffb547"), rule("gt", 90.0, "#ff5d5d")];
+        let o = parse_output(
+            &c,
+            r##"{"text":"2/3 在线","value":0.82,"items":[{"label":"mick0960","text":"420 / 512G","value":0.82,"status":"online","sub":"↓1.2M/s ↑86K/s","subRight":"82%","desc":"在线中"},{"label":"WHN","text":"1.3 / 256G","value":0.005,"status":"offline","sub":"↓1.2G ↑83M","subRight":"5天前"},{"label":"Guest","text":"128 / 128G","value":1.0,"status":"error","badge":"停用","color":"#7a7a85"}]}"##
+                .into(),
+        );
+        let items = o.items.unwrap();
+        assert_eq!(items.len(), 3);
+        assert_eq!(items[0].status.as_deref(), Some("online"));
+        assert_eq!(items[0].sub_right.as_deref(), Some("82%"));
+        assert_eq!(items[0].color.as_deref(), Some("#ffb547"));
+        assert_eq!(items[1].status.as_deref(), Some("offline"));
+        assert_eq!(items[1].color, None);
+        assert_eq!(items[2].badge.as_deref(), Some("停用"));
+        assert_eq!(items[2].color.as_deref(), Some("#7a7a85"));
     }
 
     #[test]
