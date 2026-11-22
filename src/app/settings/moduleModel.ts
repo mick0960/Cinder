@@ -85,6 +85,7 @@ export function blankModule(type: ModuleType = "command"): ModuleConfig {
     host: "",
     port: type === "tcp" ? 80 : 0,
     persistent: false,
+    collapsed: false,
     thresholds: [],
     click: null,
   };

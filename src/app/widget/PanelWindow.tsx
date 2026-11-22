@@ -1,9 +1,9 @@
-import { createSignal, For, Index, Match, onCleanup, onMount, Show, Switch } from "solid-js";
+import { createSignal, For, Index, Match, onCleanup, onMount, Show, Switch, type JSX } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow, monitorFromPoint } from "@tauri-apps/api/window";
-import { metrics, moduleOutputs, moduleHistory, modules, initStores } from "./stores";
+import { metrics, moduleOutputs, moduleHistory, modules, collapsedModules, toggleModuleCollapsed, initStores } from "./stores";
 import { Sparkline, ProgressBar, usageColor } from "../components/ModuleStyles";
 import { BatteryMeter, CpuMeter, DiskMeter, MemMeter, NetMeter } from "./Meters";
 import "./panel.css";
@@ -210,6 +210,8 @@ function ModuleRow(props: { mod: ModuleConfig }) {
     return v != null && !isErr() ? `${(v * 100).toFixed(0)}%` : text();
   };
   const items = () => (isErr() ? undefined : out()?.items) ?? [];
+  const collapsed = () => !!collapsedModules()[props.mod.id];
+  const toggleCollapse = () => toggleModuleCollapsed(props.mod.id);
   const ringFallbackItem = (): ModuleItem[] => {
     const o = out();
     if (!o || o.kind === "error" || o.value == null) return [];
@@ -220,15 +222,15 @@ function ModuleRow(props: { mod: ModuleConfig }) {
     <Show
       when={items().length === 0}
       fallback={
-        <Switch fallback={<ModuleItems mod={props.mod} out={out()!} click={click} title={rowTitle()} />}>
+        <Switch fallback={<ModuleItems mod={props.mod} out={out()!} click={click} title={rowTitle()} collapsed={collapsed()} onToggle={toggleCollapse} />}>
           <Match when={props.mod.style === "rings"}>
-            <ModuleRings mod={props.mod} out={out()!} click={click} title={rowTitle()} />
+            <ModuleRings mod={props.mod} out={out()!} click={click} title={rowTitle()} collapsed={collapsed()} onToggle={toggleCollapse} />
           </Match>
           <Match when={props.mod.style === "cards"}>
-            <ModuleCards mod={props.mod} out={out()!} click={click} title={rowTitle()} />
+            <ModuleCards mod={props.mod} out={out()!} click={click} title={rowTitle()} collapsed={collapsed()} onToggle={toggleCollapse} />
           </Match>
           <Match when={props.mod.style === "status"}>
-            <ModuleStatus mod={props.mod} out={out()!} click={click} title={rowTitle()} />
+            <ModuleStatus mod={props.mod} out={out()!} click={click} title={rowTitle()} collapsed={collapsed()} onToggle={toggleCollapse} />
           </Match>
         </Switch>
       }
@@ -339,48 +341,103 @@ function ModuleRow(props: { mod: ModuleConfig }) {
   );
 }
 
-function ModuleHeader(props: { mod: ModuleConfig; sum: string; click: ModuleClick; title?: string }) {
+function ModuleHeader(props: {
+  mod: ModuleConfig;
+  sum: string;
+  count: number;
+  click: ModuleClick;
+  title?: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  sumClass?: string;
+  sumPrefix?: JSX.Element;
+}) {
+  const hasClick = () => props.click.enabled();
+  const displaySum = () => props.sum || (props.collapsed ? `${props.count} 项` : "");
+  const headerTitle = () => (hasClick() ? props.title : props.collapsed ? "点击展开" : "点击折叠");
+
   return (
     <div
       class="row module"
-      classList={{ clickable: props.click.enabled(), "click-ok": props.click.flash() === "ok", "click-err": props.click.flash() === "err" }}
-      title={props.title}
-      onClick={props.click.run}
+      classList={{
+        clickable: hasClick(),
+        collapsible: !hasClick(),
+        "mod-collapsed": props.collapsed,
+        "click-ok": props.click.flash() === "ok",
+        "click-err": props.click.flash() === "err",
+      }}
+      title={headerTitle()}
+      onClick={() => (hasClick() ? props.click.run() : props.onToggle())}
     >
-      <span class="label" title={props.mod.name}>{props.mod.name}</span>
-      <span class="value module-sum">{props.sum}</span>
+      <span class="mod-head-left">
+        <Show
+          when={hasClick()}
+          fallback={<span class="mod-chev" classList={{ open: !props.collapsed }} aria-hidden="true">▸</span>}
+        >
+          <button
+            type="button"
+            class="mod-chev-btn"
+            title={props.collapsed ? "展开" : "折叠"}
+            aria-label={props.collapsed ? "展开" : "折叠"}
+            aria-expanded={!props.collapsed}
+            onClick={(e) => {
+              e.stopPropagation();
+              props.onToggle();
+            }}
+          >
+            <span class="mod-chev" classList={{ open: !props.collapsed }}>▸</span>
+          </button>
+        </Show>
+        <span class="label" title={props.mod.name}>{props.mod.name}</span>
+      </span>
+      <span class={`value module-sum${props.sumClass ? ` ${props.sumClass}` : ""}`}>
+        {props.sumPrefix}
+        {displaySum()}
+      </span>
     </div>
   );
 }
 
 /** 多行模块：标题行 + 按 group 分组的条目，每条有数值时带进度条 */
-function ModuleItems(props: { mod: ModuleConfig; out: ModuleOutput; click: ModuleClick; title?: string }) {
+function ModuleItems(props: { mod: ModuleConfig; out: ModuleOutput; click: ModuleClick; title?: string; collapsed: boolean; onToggle: () => void }) {
   const items = () => props.out.items ?? [];
   return (
     <>
-      <ModuleHeader mod={props.mod} sum={props.out.text} click={props.click} title={props.title} />
-      <For each={items()}>
-        {(it, i) => {
-          const color = () => it.color ?? (it.value != null ? usageColor(it.value) : undefined);
-          const newGroup = () => it.group != null && it.group !== items()[i() - 1]?.group;
-          return (
-            <>
-              <Show when={newGroup()}>
-                <div class="row module-group">{it.group}</div>
-              </Show>
-              <div class="row module item" classList={{ grouped: it.group != null }}>
-                <span class="label">{it.label}</span>
-                <span class="value" style={{ color: it.value == null ? undefined : color() }}>{it.text}</span>
-              </div>
-              <Show when={it.value != null}>
-                <div classList={{ "item-bar": true, grouped: it.group != null }}>
-                  <ProgressBar value={it.value!} color={color()} />
-                </div>
-              </Show>
-            </>
-          );
-        }}
-      </For>
+      <ModuleHeader
+        mod={props.mod}
+        sum={props.out.text}
+        count={items().length}
+        click={props.click}
+        title={props.title}
+        collapsed={props.collapsed}
+        onToggle={props.onToggle}
+      />
+      <Show when={!props.collapsed}>
+        <div class="mod-body">
+          <For each={items()}>
+            {(it, i) => {
+              const color = () => it.color ?? (it.value != null ? usageColor(it.value) : undefined);
+              const newGroup = () => it.group != null && it.group !== items()[i() - 1]?.group;
+              return (
+                <>
+                  <Show when={newGroup()}>
+                    <div class="row module-group">{it.group}</div>
+                  </Show>
+                  <div class="row module item" classList={{ grouped: it.group != null }}>
+                    <span class="label">{it.label}</span>
+                    <span class="value" style={{ color: it.value == null ? undefined : color() }}>{it.text}</span>
+                  </div>
+                  <Show when={it.value != null}>
+                    <div classList={{ "item-bar": true, grouped: it.group != null }}>
+                      <ProgressBar value={it.value!} color={color()} />
+                    </div>
+                  </Show>
+                </>
+              );
+            }}
+          </For>
+        </div>
+      </Show>
     </>
   );
 }
@@ -537,31 +594,61 @@ function formatTooltip(title: string, items: ModuleItem[], desc?: string | null)
   return lines.join("\n");
 }
 
-function ModuleRings(props: { mod: ModuleConfig; out: ModuleOutput; click: ModuleClick; title?: string }) {
-  const groups = () => groupRingItems(props.out.items ?? []);
-  const [collapsed, setCollapsed] = createSignal<Record<string, boolean>>({});
+function loadPoolCollapsed(modId: string): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(`cinder:ring-pools:${modId}`);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function ModuleRings(props: { mod: ModuleConfig; out: ModuleOutput; click: ModuleClick; title?: string; collapsed: boolean; onToggle: () => void }) {
+  const items = () => props.out.items ?? [];
+  const groups = () => groupRingItems(items());
+  const [poolCollapsed, setPoolCollapsed] = createSignal<Record<string, boolean>>(loadPoolCollapsed(props.mod.id));
   const toggleGroup = (name: string) =>
-    setCollapsed((prev) => ({ ...prev, [name]: !prev[name] }));
+    setPoolCollapsed((prev) => {
+      const next = { ...prev, [name]: !prev[name] };
+      try {
+        localStorage.setItem(`cinder:ring-pools:${props.mod.id}`, JSON.stringify(next));
+      } catch {
+        /* 忽略存储异常 */
+      }
+      return next;
+    });
 
   return (
     <>
-      <ModuleHeader mod={props.mod} sum={props.out.text} click={props.click} title={props.title} />
-      <div class="ring-list">
-        <Index each={groups()}>
-          {(g) => (
-            <Show
-              when={g().pools.length > 0}
-              fallback={<SinglePoolRingCard group={g()} />}
-            >
-              <MultiPoolRingGroup
-                group={g()}
-                collapsed={!!collapsed()[g().name]}
-                onToggle={() => toggleGroup(g().name)}
-              />
-            </Show>
-          )}
-        </Index>
-      </div>
+      <ModuleHeader
+        mod={props.mod}
+        sum={props.out.text}
+        count={groups().length}
+        click={props.click}
+        title={props.title}
+        collapsed={props.collapsed}
+        onToggle={props.onToggle}
+      />
+      <Show when={!props.collapsed}>
+        <div class="ring-list mod-body">
+          <Index each={groups()}>
+            {(g) => (
+              <Show
+                when={g().pools.length > 0}
+                fallback={<SinglePoolRingCard group={g()} />}
+              >
+                <MultiPoolRingGroup
+                  group={g()}
+                  collapsed={!!poolCollapsed()[g().name]}
+                  onToggle={() => toggleGroup(g().name)}
+                />
+              </Show>
+            )}
+          </Index>
+        </div>
+      </Show>
     </>
   );
 }
@@ -719,7 +806,7 @@ function cardItemColor(it: ModuleItem, idx: number): string {
   return it.color ?? CARD_PALETTE[idx % CARD_PALETTE.length];
 }
 
-function ModuleCards(props: { mod: ModuleConfig; out: ModuleOutput; click: ModuleClick; title?: string }) {
+function ModuleCards(props: { mod: ModuleConfig; out: ModuleOutput; click: ModuleClick; title?: string; collapsed: boolean; onToggle: () => void }) {
   const items = () => props.out.items ?? [];
   const [hoveredIdx, setHoveredIdx] = createSignal<number | null>(null);
   const hoveredItem = () => {
@@ -734,42 +821,52 @@ function ModuleCards(props: { mod: ModuleConfig; out: ModuleOutput; click: Modul
 
   return (
     <>
-      <ModuleHeader mod={props.mod} sum={props.out.text} click={props.click} title={props.title} />
-      <div class="stat-wrap">
-        <div class="stat-grid" style={{ "grid-template-columns": `repeat(${cols()}, minmax(0, 1fr))` }}>
-          <Index each={items()}>
-            {(it, idx) => (
-              <div
-                class="stat-card"
-                title={it().desc ? `${it().label}\n${it().desc}` : it().label}
-                onMouseEnter={() => setHoveredIdx(idx)}
-                onMouseLeave={() => setHoveredIdx((cur) => (cur === idx ? null : cur))}
-              >
-                <div class="stat-card-head">
-                  <span class="stat-card-label">{it().label}</span>
-                  <Show when={it().badge}>
-                    {(b) => (
-                      <span class="ring-badge" classList={{ warn: isWarnBadge(b()) }}>{b()}</span>
-                    )}
+      <ModuleHeader
+        mod={props.mod}
+        sum={props.out.text}
+        count={items().length}
+        click={props.click}
+        title={props.title}
+        collapsed={props.collapsed}
+        onToggle={props.onToggle}
+      />
+      <Show when={!props.collapsed}>
+        <div class="stat-wrap mod-body">
+          <div class="stat-grid" style={{ "grid-template-columns": `repeat(${cols()}, minmax(0, 1fr))` }}>
+            <Index each={items()}>
+              {(it, idx) => (
+                <div
+                  class="stat-card"
+                  title={it().desc ? `${it().label}\n${it().desc}` : it().label}
+                  onMouseEnter={() => setHoveredIdx(idx)}
+                  onMouseLeave={() => setHoveredIdx((cur) => (cur === idx ? null : cur))}
+                >
+                  <div class="stat-card-head">
+                    <span class="stat-card-label">{it().label}</span>
+                    <Show when={it().badge}>
+                      {(b) => (
+                        <span class="ring-badge" classList={{ warn: isWarnBadge(b()) }}>{b()}</span>
+                      )}
+                    </Show>
+                  </div>
+                  <div class="stat-card-val" style={{ color: cardItemColor(it(), idx) }}>{it().text}</div>
+                  <Show when={it().sub}>
+                    {(s) => <div class="stat-card-sub">{s()}</div>}
                   </Show>
                 </div>
-                <div class="stat-card-val" style={{ color: cardItemColor(it(), idx) }}>{it().text}</div>
-                <Show when={it().sub}>
-                  {(s) => <div class="stat-card-sub">{s()}</div>}
-                </Show>
+              )}
+            </Index>
+          </div>
+          <Show when={hoveredItem()?.desc}>
+            {(desc) => (
+              <div class="stat-tip">
+                <div class="ring-tip-title">{hoveredItem()!.label}</div>
+                <div class="stat-tip-desc">{desc()}</div>
               </div>
             )}
-          </Index>
+          </Show>
         </div>
-        <Show when={hoveredItem()?.desc}>
-          {(desc) => (
-            <div class="stat-tip">
-              <div class="ring-tip-title">{hoveredItem()!.label}</div>
-              <div class="stat-tip-desc">{desc()}</div>
-            </div>
-          )}
-        </Show>
-      </div>
+      </Show>
     </>
   );
 }
@@ -808,7 +905,7 @@ function statusLabelText(status?: string | null): { text: string; color: string 
   }
 }
 
-function ModuleStatus(props: { mod: ModuleConfig; out: ModuleOutput; click: ModuleClick; title?: string }) {
+function ModuleStatus(props: { mod: ModuleConfig; out: ModuleOutput; click: ModuleClick; title?: string; collapsed: boolean; onToggle: () => void }) {
   const items = () => props.out.items ?? [];
   const hasOnline = () => items().some((it) => it.status === "online");
   const [hoveredIdx, setHoveredIdx] = createSignal<number | null>(null);
@@ -819,86 +916,89 @@ function ModuleStatus(props: { mod: ModuleConfig; out: ModuleOutput; click: Modu
 
   return (
     <>
-      <div
-        class="row module"
-        classList={{ clickable: props.click.enabled(), "click-ok": props.click.flash() === "ok", "click-err": props.click.flash() === "err" }}
+      <ModuleHeader
+        mod={props.mod}
+        sum={props.out.text}
+        count={items().length}
+        click={props.click}
         title={props.title}
-        onClick={props.click.run}
-      >
-        <span class="label" title={props.mod.name}>{props.mod.name}</span>
-        <span class="value module-sum status-sum">
+        collapsed={props.collapsed}
+        onToggle={props.onToggle}
+        sumClass="status-sum"
+        sumPrefix={
           <Show when={hasOnline()}>
             <span class="status-sum-dot" />
           </Show>
-          {props.out.text}
-        </span>
-      </div>
-      <div class="status-wrap">
-        <div class="status-list">
-          <Index each={items()}>
-            {(it, idx) => {
-              const dimmed = () => it().status === "offline" || it().status === "error";
-              return (
-                <div
-                  class="status-card"
-                  classList={{ dimmed: dimmed() }}
-                  title={it().desc ? `${it().label}\n${it().desc}` : it().label}
-                  onMouseEnter={() => setHoveredIdx(idx)}
-                  onMouseLeave={() => setHoveredIdx((cur) => (cur === idx ? null : cur))}
-                >
-                  <div class="status-top">
-                    <span class="status-left">
-                      <Show when={it().status}>
-                        <span class="status-dot" classList={statusDotClass(it().status)} />
-                      </Show>
-                      <span class="status-name" title={it().label}>{it().label}</span>
-                      <Show when={it().badge}>
-                        {(b) => (
-                          <span class="ring-badge" classList={{ warn: isWarnBadge(b()) }}>{b()}</span>
-                        )}
-                      </Show>
-                    </span>
-                    <span class="status-val" style={{ color: it().color ?? undefined }}>{it().text}</span>
+        }
+      />
+      <Show when={!props.collapsed}>
+        <div class="status-wrap mod-body">
+          <div class="status-list">
+            <Index each={items()}>
+              {(it, idx) => {
+                const dimmed = () => it().status === "offline" || it().status === "error";
+                return (
+                  <div
+                    class="status-card"
+                    classList={{ dimmed: dimmed() }}
+                    title={it().desc ? `${it().label}\n${it().desc}` : it().label}
+                    onMouseEnter={() => setHoveredIdx(idx)}
+                    onMouseLeave={() => setHoveredIdx((cur) => (cur === idx ? null : cur))}
+                  >
+                    <div class="status-top">
+                      <span class="status-left">
+                        <Show when={it().status}>
+                          <span class="status-dot" classList={statusDotClass(it().status)} />
+                        </Show>
+                        <span class="status-name" title={it().label}>{it().label}</span>
+                        <Show when={it().badge}>
+                          {(b) => (
+                            <span class="ring-badge" classList={{ warn: isWarnBadge(b()) }}>{b()}</span>
+                          )}
+                        </Show>
+                      </span>
+                      <span class="status-val" style={{ color: it().color ?? undefined }}>{it().text}</span>
+                    </div>
+                    <Show when={it().value != null}>
+                      <div class="status-bar">
+                        <div
+                          class="status-fill"
+                          style={{
+                            width: `${statusBarPct(it().value!)}%`,
+                            "--c": statusBarColor(it()),
+                          }}
+                        />
+                      </div>
+                    </Show>
+                    <Show when={it().sub || it().subRight}>
+                      <div class="status-sub">
+                        <span class="status-sub-left">{it().sub ?? ""}</span>
+                        <span class="status-sub-right">{it().subRight ?? ""}</span>
+                      </div>
+                    </Show>
                   </div>
-                  <Show when={it().value != null}>
-                    <div class="status-bar">
-                      <div
-                        class="status-fill"
-                        style={{
-                          width: `${statusBarPct(it().value!)}%`,
-                          "--c": statusBarColor(it()),
-                        }}
-                      />
-                    </div>
-                  </Show>
-                  <Show when={it().sub || it().subRight}>
-                    <div class="status-sub">
-                      <span class="status-sub-left">{it().sub ?? ""}</span>
-                      <span class="status-sub-right">{it().subRight ?? ""}</span>
-                    </div>
-                  </Show>
+                );
+              }}
+            </Index>
+          </div>
+          <Show when={hoveredItem()?.desc}>
+            {(desc) => {
+              const st = () => statusLabelText(hoveredItem()?.status);
+              return (
+                <div class="stat-tip">
+                  <div class="ring-tip-title status-tip-head">
+                    <span>{hoveredItem()!.label}</span>
+                    <Show when={st()}>
+                      {(s) => <span style={{ color: s().color, "font-weight": 500 }}>{s().text}</span>}
+                    </Show>
+                  </div>
+                  <div class="stat-tip-desc">{desc()}</div>
                 </div>
               );
             }}
-          </Index>
+          </Show>
         </div>
-        <Show when={hoveredItem()?.desc}>
-          {(desc) => {
-            const st = () => statusLabelText(hoveredItem()?.status);
-            return (
-              <div class="stat-tip">
-                <div class="ring-tip-title status-tip-head">
-                  <span>{hoveredItem()!.label}</span>
-                  <Show when={st()}>
-                    {(s) => <span style={{ color: s().color, "font-weight": 500 }}>{s().text}</span>}
-                  </Show>
-                </div>
-                <div class="stat-tip-desc">{desc()}</div>
-              </div>
-            );
-          }}
-        </Show>
-      </div>
+      </Show>
     </>
   );
 }

@@ -121,6 +121,8 @@ pub struct ModuleConfig {
     pub http_insecure: bool,
     /// command：只启动一次，每输出一行刷新一次
     pub persistent: bool,
+    /// 多条目模块在监控面板中是否折叠
+    pub collapsed: bool,
     pub thresholds: Vec<Threshold>,
     pub click: Option<ClickAction>,
 }
@@ -150,6 +152,7 @@ impl Default for ModuleConfig {
             http_no_proxy: false,
             http_insecure: false,
             persistent: false,
+            collapsed: false,
             thresholds: Vec::new(),
             click: None,
         }
@@ -349,6 +352,24 @@ pub fn set_modules(app: &AppHandle, modules: Vec<ModuleConfig>) -> Option<Driver
     drop(cfg);
     save(app, &snapshot);
     reset
+}
+
+/// 仅更新单个模块在面板中的折叠状态并持久化，不触发模块重载
+pub fn set_module_collapsed(app: &AppHandle, id: &str, collapsed: bool) -> bool {
+    let snapshot = {
+        let state = app.state::<AppState>();
+        let mut cfg = state.0.write().unwrap();
+        let Some(m) = cfg.modules.iter_mut().find(|m| m.id == id) else {
+            return false;
+        };
+        if m.collapsed == collapsed {
+            return true;
+        }
+        m.collapsed = collapsed;
+        cfg.clone()
+    };
+    save(app, &snapshot);
+    true
 }
 
 /// 保存驱动指标，返回实际生效的配置（不合法的取值会被修正）

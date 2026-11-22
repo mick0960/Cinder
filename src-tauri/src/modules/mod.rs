@@ -574,7 +574,7 @@ mod tests {
         // 0.2.0 及以前保存的模块没有新增的字段
         let old = r#"{"id":"m1","type":"command","name":"x","command":"echo 1","shell":"powershell","intervalMs":5000,"timeoutMs":3000,"style":"text","format":"plain","color":null,"unit":null}"#;
         let m: ModuleConfig = serde_json::from_str(old).unwrap();
-        assert!(!m.persistent && m.thresholds.is_empty() && m.click.is_none() && m.url.is_empty());
+        assert!(!m.persistent && !m.collapsed && m.thresholds.is_empty() && m.click.is_none() && m.url.is_empty());
         assert_eq!(m.http_method, "GET");
         assert_eq!(m.port, 0);
         assert!(!m.http_no_proxy);

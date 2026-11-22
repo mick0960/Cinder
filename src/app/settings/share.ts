@@ -46,6 +46,7 @@ function slim(m: ModuleConfig): Record<string, unknown> {
   // 与类型自带的默认单位不同才写出来；用户把 Ping 的 ms 清空了，要写成空串，否则对方导入时会被默认值补回
   if (m.unit !== defaultUnit(m.type)) out.unit = m.unit ?? "";
   if (m.color) out.color = m.color;
+  if (m.collapsed) out.collapsed = true;
   if (m.thresholds.length) out.thresholds = m.thresholds.map(({ op, value, color }) => ({ op, value, color }));
   if (m.click) {
     out.click = m.click.kind === "command"
@@ -232,6 +233,7 @@ function sanitizeModule(raw: unknown, index: number): ImportedModule | string {
   if (raw.unit !== undefined) m.unit = text(raw.unit, 12) || null;
   m.color = color(raw.color);
   if (raw.color != null && !m.color) notes.push("颜色格式不正确，已忽略");
+  m.collapsed = raw.collapsed === true;
   m.thresholds = sanitizeThresholds(raw.thresholds, notes);
   m.click = sanitizeClick(raw.click, notes);
 

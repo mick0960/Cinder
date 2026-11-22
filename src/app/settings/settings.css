@@ -54,6 +54,25 @@
 .mitem.active { background: var(--bg-3); }
 .mitem.active::before { transform: scaleY(1); }
 .mitem.leaving { opacity: 0; transform: translateX(-24px); max-height: 0; padding-top: 0; padding-bottom: 0; margin: 0; overflow: hidden; pointer-events: none; }
+.mhandle {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  margin-left: -4px; margin-right: -2px; padding: 2px 1px; color: #5c5c66; cursor: grab;
+  transition: color 0.15s;
+}
+.mhandle svg { display: block; fill: currentColor; }
+.mitem:hover .mhandle, .mitem.active .mhandle { color: #8c8c98; }
+.mhandle:hover { color: #ccc !important; }
+.mlist.dragging .mitem:hover { background: transparent; transform: none; }
+.mlist.dragging .mitem.active:hover { background: var(--bg-3); }
+.mitem.dragging { opacity: 0.35; background: var(--bg-2); transform: none !important; }
+.mitem.drop-before::after, .mitem.drop-after::after {
+  content: ""; position: absolute; left: 6px; right: 6px; height: 2px; border-radius: 2px;
+  background: var(--accent-2); box-shadow: 0 0 8px rgba(76, 194, 255, 0.75);
+  pointer-events: none; z-index: 2;
+}
+.mitem.drop-before::after { top: -2px; }
+.mitem.drop-after::after { bottom: -2px; }
+body.dragging-modules, body.dragging-modules * { cursor: grabbing !important; user-select: none; }
 .mdot { width: 8px; height: 8px; border-radius: 50%; flex: none; box-shadow: 0 0 6px currentColor; transition: background-color 0.3s; }
 .mname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mstyle { color: #888; flex: none; display: flex; }

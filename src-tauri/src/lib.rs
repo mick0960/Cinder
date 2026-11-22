@@ -112,6 +112,7 @@ pub fn run() {
             commands::popup_widget_menu,
             commands::open_settings,
             commands::save_modules,
+            commands::set_module_collapsed,
             commands::module_click,
             commands::set_driver,
             commands::get_runners,

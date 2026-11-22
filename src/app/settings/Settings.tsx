@@ -1,5 +1,6 @@
 import { createEffect, createMemo, createSignal, Index, onCleanup, onMount, Show } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AppConfig, ModuleConfig } from "../../types";
 import { RunnerSettings } from "./RunnerSettings";
@@ -35,6 +36,9 @@ export function Settings() {
   const [justSaved, setJustSaved] = createSignal(false);
   const [saveShake, setSaveShake] = createSignal(false);
   const [dialog, setDialog] = createSignal<Dialog>(null);
+  const [dragFrom, setDragFrom] = createSignal<number | null>(null);
+  const [dropPos, setDropPos] = createSignal<{ index: number; after: boolean } | null>(null);
+  let listEl!: HTMLDivElement;
 
   invoke<AppConfig>("get_config").then((c) => {
     setModules(c.modules ?? []);
@@ -144,6 +148,151 @@ export function Settings() {
     }
   };
 
+  // 拖动排序（Pointer Events）：避开 WebView2 原生文件拖放冲突，兼顾点击选中与自动滚动
+  const DRAG_THRESHOLD = 5;
+  const SCROLL_ZONE = 28;
+  let drag: {
+    pointerId: number;
+    el: HTMLElement;
+    from: number;
+    startY: number;
+    lastY: number;
+    active: boolean;
+    slot: number;
+    raf: number;
+  } | null = null;
+  let suppressClick = false;
+
+  const updateDropTarget = (clientY: number) => {
+    if (!drag || !listEl) return;
+    const rows = listEl.querySelectorAll<HTMLElement>(".mitem");
+    let slot = rows.length;
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i].getBoundingClientRect();
+      if (clientY < r.top + r.height / 2) {
+        slot = i;
+        break;
+      }
+    }
+    drag.slot = slot;
+    if (slot === drag.from || slot === drag.from + 1) {
+      setDropPos(null);
+    } else if (slot < rows.length) {
+      setDropPos({ index: slot, after: false });
+    } else if (rows.length > 0) {
+      setDropPos({ index: rows.length - 1, after: true });
+    }
+  };
+
+  const tickAutoScroll = () => {
+    if (!drag?.active || !listEl) return;
+    const rect = listEl.getBoundingClientRect();
+    let delta = 0;
+    if (drag.lastY < rect.top + SCROLL_ZONE) {
+      delta = -Math.max(2, Math.round(((rect.top + SCROLL_ZONE - drag.lastY) / SCROLL_ZONE) * 10));
+    } else if (drag.lastY > rect.bottom - SCROLL_ZONE) {
+      delta = Math.max(2, Math.round(((drag.lastY - (rect.bottom - SCROLL_ZONE)) / SCROLL_ZONE) * 10));
+    }
+    if (delta !== 0) {
+      const prev = listEl.scrollTop;
+      listEl.scrollTop += delta;
+      if (listEl.scrollTop !== prev) updateDropTarget(drag.lastY);
+    }
+    drag.raf = requestAnimationFrame(tickAutoScroll);
+  };
+
+  const onDragMove = (e: PointerEvent) => {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    drag.lastY = e.clientY;
+    if (!drag.active) {
+      if (Math.abs(e.clientY - drag.startY) < DRAG_THRESHOLD) return;
+      drag.active = true;
+      clearTimeout(deleteTimer);
+      setPendingDelete(null);
+      setDragFrom(drag.from);
+      document.body.classList.add("dragging-modules");
+      try {
+        drag.el.setPointerCapture(drag.pointerId);
+      } catch {
+        /* 忽略 capture 异常 */
+      }
+      drag.raf = requestAnimationFrame(tickAutoScroll);
+    }
+    updateDropTarget(e.clientY);
+  };
+
+  const finishDrag = (commit: boolean) => {
+    if (!drag) return;
+    const state = drag;
+    drag = null;
+    cancelAnimationFrame(state.raf);
+    window.removeEventListener("pointermove", onDragMove);
+    window.removeEventListener("pointerup", onDragUp);
+    window.removeEventListener("pointercancel", onDragCancel);
+    window.removeEventListener("keydown", onDragKey);
+    document.body.classList.remove("dragging-modules");
+    try {
+      if (state.el.hasPointerCapture(state.pointerId)) {
+        state.el.releasePointerCapture(state.pointerId);
+      }
+    } catch {
+      /* 忽略 */
+    }
+    setDragFrom(null);
+    setDropPos(null);
+
+    if (state.active) {
+      suppressClick = true;
+      window.setTimeout(() => (suppressClick = false), 0);
+      if (commit && state.slot !== state.from && state.slot !== state.from + 1) {
+        const to = state.slot > state.from ? state.slot - 1 : state.slot;
+        setModules((ms) => {
+          if (state.from < 0 || state.from >= ms.length || to < 0 || to >= ms.length) return ms;
+          const next = [...ms];
+          const [moved] = next.splice(state.from, 1);
+          next.splice(to, 0, moved);
+          return next;
+        });
+        setStatus(null);
+      }
+    }
+  };
+
+  const onDragUp = (e: PointerEvent) => {
+    if (drag && e.pointerId === drag.pointerId) finishDrag(true);
+  };
+  const onDragCancel = (e: PointerEvent) => {
+    if (drag && e.pointerId === drag.pointerId) finishDrag(false);
+  };
+  const onDragKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape" && drag?.active) {
+      e.preventDefault();
+      finishDrag(false);
+    }
+  };
+
+  const onItemPointerDown = (e: PointerEvent, index: number) => {
+    if (e.button !== 0 || leaving() || modules().length <= 1) return;
+    if ((e.target as HTMLElement | null)?.closest(".del")) return;
+    finishDrag(false);
+    drag = {
+      pointerId: e.pointerId,
+      el: e.currentTarget as HTMLElement,
+      from: index,
+      startY: e.clientY,
+      lastY: e.clientY,
+      active: false,
+      slot: index,
+      raf: 0,
+    };
+    window.addEventListener("pointermove", onDragMove);
+    window.addEventListener("pointerup", onDragUp);
+    window.addEventListener("pointercancel", onDragCancel);
+    window.addEventListener("keydown", onDragKey);
+  };
+
+  onCleanup(() => finishDrag(false));
+
   onMount(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
@@ -153,6 +302,21 @@ export function Settings() {
     };
     window.addEventListener("keydown", onKey);
     onCleanup(() => window.removeEventListener("keydown", onKey));
+
+    // 面板内折叠状态变化时同步到当前列表与已保存基线，避免误判未保存或保存时覆盖
+    const unCollapsed = listen<{ id: string; collapsed: boolean }>("module://collapsed", (e) => {
+      const { id, collapsed } = e.payload;
+      setModules((ms) => ms.map((m) => (m.id === id ? { ...m, collapsed } : m)));
+      setSaved((prev) => {
+        try {
+          const list = JSON.parse(prev) as ModuleConfig[];
+          return JSON.stringify(list.map((m) => (m.id === id ? { ...m, collapsed } : m)));
+        } catch {
+          return prev;
+        }
+      });
+    });
+    onCleanup(() => unCollapsed.then((f) => f()));
 
     // 有未保存修改时拦截一次关闭
     let warned = false;
@@ -226,16 +390,38 @@ export function Settings() {
             <button onClick={() => setDialog("templates")} title="一键添加常用模块">📚 模板库</button>
             <button onClick={() => setDialog("share")} title="复制模块配置分享给别人，或导入别人分享的配置">⇄ 导入 / 导出</button>
           </div>
-          <div class="mlist">
+          <div class="mlist" classList={{ dragging: dragFrom() !== null }} ref={listEl}>
             {/* Index：编辑时模块对象会被替换，按位置复用节点，避免整行重建、入场动画重播 */}
             <Index each={modules()}>
-              {(m) => (
+              {(m, i) => (
                 <div
                   class="mitem"
-                  classList={{ active: m().id === selected(), leaving: leaving() === m().id }}
+                  classList={{
+                    active: m().id === selected(),
+                    leaving: leaving() === m().id,
+                    dragging: dragFrom() === i,
+                    "drop-before": dropPos()?.index === i && !dropPos()?.after,
+                    "drop-after": dropPos()?.index === i && !!dropPos()?.after,
+                  }}
                   title={targetOf(m())}
-                  onClick={() => select(m().id)}
+                  onPointerDown={(e) => onItemPointerDown(e, i)}
+                  onClick={() => {
+                    if (suppressClick) return;
+                    select(m().id);
+                  }}
                 >
+                  <Show when={modules().length > 1}>
+                    <span class="mhandle" title="拖动排序" aria-hidden="true">
+                      <svg viewBox="0 0 8 14" width="8" height="14">
+                        <circle cx="2" cy="3" r="1.1" />
+                        <circle cx="6" cy="3" r="1.1" />
+                        <circle cx="2" cy="7" r="1.1" />
+                        <circle cx="6" cy="7" r="1.1" />
+                        <circle cx="2" cy="11" r="1.1" />
+                        <circle cx="6" cy="11" r="1.1" />
+                      </svg>
+                    </span>
+                  </Show>
                   <span class="mdot" style={{ background: m().color ?? COLOR_OK }} />
                   <span class="mname">{m().name || "（未命名）"}</span>
                   <Show when={typeTag(m())}>{(tag) => <span class="mtag">{tag()}</span>}</Show>

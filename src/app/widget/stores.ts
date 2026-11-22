@@ -21,6 +21,8 @@ const [metrics, setMetrics] = createSignal<MetricsSnapshot | null>(null);
 const [moduleOutputs, setModuleOutputs] = createSignal<Record<string, ModuleOutput>>({});
 const [moduleHistory, setModuleHistory] = createSignal<Record<string, number[]>>({});
 const [modules, setModules] = createSignal<ModuleConfig[]>([]);
+/** 模块折叠状态独立存放：切换折叠时不替换 modules 里的对象引用，避免 <For> 重建整行 DOM */
+const [collapsedModules, setCollapsedModules] = createSignal<Record<string, boolean>>({});
 const [runners, setRunners] = createSignal<RunnerConfig[]>([]);
 const [character, setCharacter] = createSignal<string>("bonfire");
 const [idle, setIdle] = createSignal(false);
@@ -53,7 +55,9 @@ export function initStores() {
   started = true;
 
   invoke<AppConfig>("get_config").then((c) => {
-    setModules(c.modules ?? []);
+    const list = c.modules ?? [];
+    setModules(list);
+    setCollapsedModules(Object.fromEntries(list.map((m) => [m.id, !!m.collapsed])));
     if (c.character) setCharacter(c.character);
     setDriver(c.driver ?? DEFAULT_DRIVER);
   });
@@ -95,8 +99,14 @@ export function initStores() {
     const keep = <T,>(rec: Record<string, T>) =>
       Object.fromEntries(Object.entries(rec).filter(([k]) => ids.has(k)));
     setModules(list);
+    setCollapsedModules(Object.fromEntries(list.map((m) => [m.id, !!m.collapsed])));
     setModuleOutputs(keep);
     setModuleHistory(keep);
+  });
+
+  listen<{ id: string; collapsed: boolean }>("module://collapsed", (e) => {
+    const { id, collapsed } = e.payload;
+    setCollapsedModules((prev) => (prev[id] === collapsed ? prev : { ...prev, [id]: collapsed }));
   });
 
   listen<string>("character://changed", (e) => setCharacter(e.payload));
@@ -116,7 +126,13 @@ export function loadRunners() {
   listen<RunnerConfig[]>("config://runners", (e) => setRunners(e.payload ?? []));
 }
 
-export { metrics, metricHistory, moduleOutputs, moduleHistory, modules, character, runners, driver, idle };
+export function toggleModuleCollapsed(id: string) {
+  const next = !collapsedModules()[id];
+  setCollapsedModules((prev) => ({ ...prev, [id]: next }));
+  invoke("set_module_collapsed", { id, collapsed: next }).catch(() => {});
+}
+
+export { metrics, metricHistory, moduleOutputs, moduleHistory, modules, collapsedModules, character, runners, driver, idle };
 
 export function fmtRate(bps: number): string {
   if (bps < 1024) return `${bps} B/s`;

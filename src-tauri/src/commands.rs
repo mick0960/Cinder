@@ -109,13 +109,27 @@ pub async fn open_settings(app: AppHandle) -> Result<(), String> {
 pub fn save_modules(app: AppHandle, modules: Vec<ModuleConfig>) -> Result<(), String> {
     let reset_driver = config::set_modules(&app, modules.clone());
     modules::reload(&app);
-    // 通知悬浮窗刷新模块列表，无需重启
-    let _ = app.emit_to("widget", "config://modules", &modules);
+    // 广播给悬浮窗、监控面板和设置页刷新模块列表，无需重启
+    let _ = app.emit("config://modules", &modules);
     // 驱动篝火的模块被删掉时，驱动已回退到 CPU
     if let Some(driver) = reset_driver {
         let _ = app.emit("config://driver", &driver);
     }
     Ok(())
+}
+
+#[derive(serde::Serialize, Clone)]
+struct ModuleCollapsedPayload {
+    id: String,
+    collapsed: bool,
+}
+
+/// 切换多条目模块在面板中的折叠状态：直接持久化并通知各窗口，不重载模块进程
+#[tauri::command]
+pub fn set_module_collapsed(app: AppHandle, id: String, collapsed: bool) {
+    if config::set_module_collapsed(&app, &id, collapsed) {
+        let _ = app.emit("module://collapsed", ModuleCollapsedPayload { id, collapsed });
+    }
 }
 
 /// 点击模块行：按模块 id 取出已保存的点击动作并执行。前端传不了命令内容，只能指定模块。

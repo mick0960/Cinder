@@ -125,6 +125,8 @@ export interface ModuleConfig {
   port: number;
   /** command：只启动一次，每输出一行刷新一次 */
   persistent: boolean;
+  /** 多条目模块在监控面板中是否折叠 */
+  collapsed: boolean;
   thresholds: ThresholdRule[];
   click: ClickAction | null;
 }

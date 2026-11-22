@@ -83,6 +83,8 @@ npm run tauri build    # 打包，安装包位于 src-tauri/target/release/bundl
 右键篝火 → **设置…** → **监控模块**：
 
 - 点击“新增”添加一个空白模块，或点击“**模板库**”一键添加常用模块（GPU、网络延迟、TCP 端口探测、公网 IP、本地 API 直连、开机时长、WSL / Docker 状态……），不用写任何命令。
+- 左侧模块列表支持**拖动排序**，调整顺序后点击“保存并生效”即可按新顺序显示在监控面板里。
+- 多条目长模块（如圆环、状态列表、指标卡、多行 JSON）在监控面板中支持**折叠 / 展开**并自动记住状态（配有点击动作时点击左侧箭头折叠，点击其余区域触发点击动作）。
 - “测试运行”可以立即看到输出、数值、颜色与耗时。
 - 点击“保存并生效”后立刻生效，无需重启。
 
@@ -294,6 +296,7 @@ if (Get-Process -Name Code -ErrorAction SilentlyContinue) { '运行中' } else {
   "host": "",
   "port": 0,
   "persistent": true,
+  "collapsed": false,
   "thresholds": [{ "op": "gt", "value": 85, "color": "#ff5d5d" }],
   "click": { "kind": "command", "target": "taskmgr", "shell": "powershell" }
 }
