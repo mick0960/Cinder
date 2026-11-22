@@ -509,7 +509,7 @@ dependencies = [
 
 [[package]]
 name = "cinder"
-version = "0.3.131"
+version = "0.3.132"
 dependencies = [
  "encoding_rs",
  "reqwest",
